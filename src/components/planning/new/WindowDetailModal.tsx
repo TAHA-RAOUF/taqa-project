@@ -63,11 +63,6 @@ export const WindowDetailModal: React.FC<WindowDetailModalProps> = ({
   // Calculate statistics
   const totalEstimatedHours = relatedActionPlans.reduce((sum, plan) => 
     sum + (plan.totalDurationDays * 8), 0); // Assuming 8 hours per day
-  
-  const criticalityStats = assignedAnomalies.reduce((stats, anomaly) => {
-    stats[anomaly.criticalityLevel] = (stats[anomaly.criticalityLevel] || 0) + 1;
-    return stats;
-  }, {} as Record<string, number>);
 
   const utilization = window.durationDays > 0 
     ? (totalEstimatedHours / (window.durationDays * 24)) * 100 
@@ -317,79 +312,171 @@ export const WindowDetailModal: React.FC<WindowDetailModalProps> = ({
               </CardContent>
             </Card>
 
-            {/* Statistics */}
+            {/* Anomaly Dashboard Statistics */}
             <Card className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-4">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <BarChart3 className="h-5 w-5 text-purple-600" />
-                  Statistiques
+                  Tableau de Bord des Anomalies
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Key metrics */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="bg-blue-50 rounded-lg p-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-base font-medium text-blue-700">Anomalies</span>
-                      <span className="text-3xl font-bold text-blue-900">{assignedAnomalies.length}</span>
-                    </div>
+                {/* Key Performance Indicators */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-blue-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-blue-900">{assignedAnomalies.length}</div>
+                    <div className="text-sm font-medium text-blue-700">Total Anomalies</div>
                   </div>
-                  <div className="bg-green-50 rounded-lg p-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-base font-medium text-green-700">Heures Est.</span>
-                      <span className="text-3xl font-bold text-green-900">{totalEstimatedHours}h</span>
+                  <div className="bg-red-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-red-900">
+                      {assignedAnomalies.filter(a => a.criticalityLevel === 'critical').length}
                     </div>
+                    <div className="text-sm font-medium text-red-700">Critiques</div>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-900">
+                      {assignedAnomalies.filter(a => a.status === 'treated' || a.status === 'closed').length}
+                    </div>
+                    <div className="text-sm font-medium text-green-700">Résolues</div>
+                  </div>
+                  <div className="bg-orange-50 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-orange-900">
+                      {assignedAnomalies.filter(a => a.status === 'in_progress').length}
+                    </div>
+                    <div className="text-sm font-medium text-orange-700">En Cours</div>
                   </div>
                 </div>
 
-                {/* Utilization with visual indicator */}
+                {/* Status Distribution */}
                 <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-base font-medium text-gray-700">Taux d'utilisation</span>
-                    <span className={`text-base font-bold ${
-                      utilization > 90 ? 'text-red-600' : 
-                      utilization > 70 ? 'text-yellow-600' : 'text-green-600'
-                    }`}>
-                      {utilization.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-4">
-                    <div 
-                      className={`h-4 rounded-full transition-all duration-500 ${
-                        utilization > 90 ? 'bg-red-500' : 
-                        utilization > 70 ? 'bg-yellow-500' : 'bg-green-500'
-                      }`}
-                      style={{ width: `${Math.min(utilization, 100)}%` }}
-                    />
-                  </div>
-                  <div className="text-base text-gray-500">
-                    {utilization > 90 ? 'Surcharge - Risque de retard' : 
-                     utilization > 70 ? 'Bien utilisé' : 'Capacité disponible'}
+                  <h4 className="text-base font-medium text-gray-700">Répartition par Statut</h4>
+                  <div className="space-y-2">
+                    {['new', 'in_progress', 'treated', 'closed'].map(status => {
+                      const count = assignedAnomalies.filter(a => a.status === status).length;
+                      const percentage = assignedAnomalies.length > 0 ? (count / assignedAnomalies.length) * 100 : 0;
+                      const statusLabels = {
+                        'new': 'Nouveau',
+                        'in_progress': 'En cours',
+                        'treated': 'Traité',
+                        'closed': 'Fermé'
+                      };
+                      const statusColors = {
+                        'new': 'bg-gray-500',
+                        'in_progress': 'bg-yellow-500',
+                        'treated': 'bg-blue-500',
+                        'closed': 'bg-green-500'
+                      };
+                      
+                      return (
+                        <div key={status} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${statusColors[status as keyof typeof statusColors]}`}></div>
+                            <span className="text-sm font-medium">{statusLabels[status as keyof typeof statusLabels]}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold">{count}</span>
+                            <div className="w-16 h-2 bg-gray-200 rounded-full">
+                              <div 
+                                className={`h-2 rounded-full ${statusColors[status as keyof typeof statusColors]}`}
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                
-                {/* Criticality breakdown with enhanced visuals */}
-                <div className="space-y-4">
-                  <span className="text-base font-medium text-gray-700">Répartition par criticité</span>
-                  <div className="space-y-3">
-                    {Object.entries(criticalityStats).map(([level, count]) => (
-                      <div key={level} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Badge className={getCriticalityColor(level)} variant="default">
-                            {level}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-base font-medium">{count}</span>
-                          <div className="w-10 h-3 bg-gray-200 rounded-full">
-                            <div 
-                              className={`h-3 rounded-full ${getCriticalityColor(level).replace('text-white', '').split(' ')[0]}`}
-                              style={{ width: `${(count / assignedAnomalies.length) * 100}%` }}
-                            />
-                          </div>
+
+                {/* Safety Scores Overview */}
+                <div className="space-y-3">
+                  <h4 className="text-base font-medium text-gray-700">Scores de Sécurité Moyens</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    {[
+                      {
+                        label: 'Fiabilité & Intégrité',
+                        value: assignedAnomalies.length > 0 
+                          ? (assignedAnomalies.reduce((sum, a) => sum + (a.useUserScores ? a.userFiabiliteIntegriteScore || a.fiabiliteIntegriteScore : a.fiabiliteIntegriteScore), 0) / assignedAnomalies.length).toFixed(1)
+                          : '0',
+                        color: 'bg-blue-500'
+                      },
+                      {
+                        label: 'Disponibilité',
+                        value: assignedAnomalies.length > 0 
+                          ? (assignedAnomalies.reduce((sum, a) => sum + (a.useUserScores ? a.userDisponibiliteScore || a.disponibiliteScore : a.disponibiliteScore), 0) / assignedAnomalies.length).toFixed(1)
+                          : '0',
+                        color: 'bg-green-500'
+                      },
+                      {
+                        label: 'Sécurité Process',
+                        value: assignedAnomalies.length > 0 
+                          ? (assignedAnomalies.reduce((sum, a) => sum + (a.useUserScores ? a.userProcessSafetyScore || a.processSafetyScore : a.processSafetyScore), 0) / assignedAnomalies.length).toFixed(1)
+                          : '0',
+                        color: 'bg-red-500'
+                      }
+                    ].map((score, index) => (
+                      <div key={index} className="bg-white border rounded-lg p-4 text-center">
+                        <div className="text-2xl font-bold text-gray-900">{score.value}/5</div>
+                        <div className="text-xs text-gray-600 mt-1">{score.label}</div>
+                        <div className="w-full h-2 bg-gray-200 rounded-full mt-2">
+                          <div 
+                            className={`h-2 rounded-full ${score.color}`}
+                            style={{ width: `${(parseFloat(score.value) / 5) * 100}%` }}
+                          />
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* Window Efficiency Metrics */}
+                <div className="space-y-3">
+                  <h4 className="text-base font-medium text-gray-700">Efficacité de la Fenêtre</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-purple-700">Temps Estimé Total</span>
+                        <span className="text-xl font-bold text-purple-900">
+                          {assignedAnomalies.reduce((sum, a) => sum + (a.estimatedHours || 0), 0)}h
+                        </span>
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-indigo-700">Taux d'Occupation</span>
+                        <span className={`text-xl font-bold ${
+                          utilization > 90 ? 'text-red-600' : 
+                          utilization > 70 ? 'text-yellow-600' : 'text-green-600'
+                        }`}>
+                          {utilization.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Service Distribution */}
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium text-gray-600 mb-2">Répartition par Service</h5>
+                    <div className="space-y-1">
+                      {Array.from(new Set(assignedAnomalies.map(a => a.service))).map(service => {
+                        const count = assignedAnomalies.filter(a => a.service === service).length;
+                        const percentage = (count / assignedAnomalies.length) * 100;
+                        return (
+                          <div key={service} className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded">
+                            <span className="font-medium">{service}</span>
+                            <div className="flex items-center gap-2">
+                              <span>{count}</span>
+                              <div className="w-12 h-1.5 bg-gray-200 rounded-full">
+                                <div 
+                                  className="h-1.5 bg-blue-500 rounded-full"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </CardContent>
