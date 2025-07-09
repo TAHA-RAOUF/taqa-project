@@ -10,18 +10,16 @@ export interface Anomaly {
   createdAt: Date;
   updatedAt: Date;
   
-  // AI Predictions
-  fiabiliteScore: number;
-  integriteScore: number;
-  disponibiliteScore: number;
-  processSafetyScore: number;
+  // AI Predictions (combined and scaled to /5)
+  fiabiliteIntegriteScore: number; // Combined Fiabilité + Intégrité score /5
+  disponibiliteScore: number; // /5
+  processSafetyScore: number; // /5
   criticalityLevel: 'low' | 'medium' | 'high' | 'critical';
   
   // User overrides
-  userFiabiliteScore?: number;
-  userIntegriteScore?: number;
-  userDisponibiliteScore?: number;
-  userProcessSafetyScore?: number;
+  userFiabiliteIntegriteScore?: number; // /5
+  userDisponibiliteScore?: number; // /5
+  userProcessSafetyScore?: number; // /5
   userCriticalityLevel?: 'low' | 'medium' | 'high' | 'critical';
   useUserScores?: boolean;
   lastModifiedBy?: string;

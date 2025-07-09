@@ -131,7 +131,7 @@ export class IntelligentPlanningService {
    */
   private async getTreatedUnscheduledAnomalies(): Promise<Anomaly[]> {
     const response = await this.anomalyService.getAllAnomalies({ status: 'treated' });
-    const backendAnomalies = (response.items as unknown as BackendAnomaly[]) || [];
+    const backendAnomalies = (response.item as unknown as BackendAnomaly[]) || [];
     
     return backendAnomalies
       .filter((anomaly: BackendAnomaly) => 

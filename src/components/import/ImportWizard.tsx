@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge';
 import { ImportBatch } from '../../types';
 import { importService } from '../../services/importService';
 import { ValidationError } from '../../services/apiService';
+import toast from 'react-hot-toast';
 
 interface ImportWizardProps {
   onImport?: (files: File[]) => void;
@@ -59,7 +60,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport }) => {
       }
       
       if (result.failed_rows > 0) {
-        toast.warning(`Import terminé avec ${result.failed_rows} erreur(s)`);
+        toast(`Import terminé avec ${result.failed_rows} erreur(s)`, {
+          icon: '⚠️',
+          style: { background: '#f59e0b', color: 'white' }
+        });
       } else {
         toast.success('Import réalisé avec succès');
       }
@@ -91,7 +95,10 @@ export const ImportWizard: React.FC<ImportWizardProps> = ({ onImport }) => {
             onImport(files);
           }
           
-          toast.info('Mode démo - import simulé');
+          toast('Mode démo - import simulé', {
+            icon: 'ℹ️',
+            style: { background: '#3b82f6', color: 'white' }
+          });
         }, 2000);
       }
     }

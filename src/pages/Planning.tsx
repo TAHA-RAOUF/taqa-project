@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Settings, Zap, AlertCircle, CheckCircle } from 'lucide-react';
+import { Calendar, Settings, Zap, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { CalendarView } from '../components/planning/CalendarView';
 import { IntelligentPlanning } from '../components/planning/IntelligentPlanning';
+import { TreatedAnomaliesStatus } from '../components/planning/TreatedAnomaliesStatus';
 import { useData } from '../contexts/DataContext';
 import { useIntelligentPlanning } from '../hooks/useIntelligentPlanning';
+import { usePlanningLogging } from '../hooks/useLogging';
 import { MaintenanceWindow } from '../types';
 import { planningIntegration } from '../lib/planningUtils';
 import PlanningEnhancer from '../lib/planningEnhancer';
+import AutoPlanningService from '../services/autoPlanningService';
 import toast from 'react-hot-toast';
 
 export const Planning: React.FC = () => {
@@ -21,8 +24,26 @@ export const Planning: React.FC = () => {
     updateAnomaly 
   } = useData();
 
+  // Filter only treated anomalies for planning
+  const treatedAnomalies = anomalies.filter(anomaly => anomaly.status === 'treated');
+
   const intelligentPlanning = useIntelligentPlanning();
+  const { 
+    logWindowCreated, 
+    logWindowUpdated, 
+    logAutoScheduling, 
+    logManualScheduling, 
+    logError 
+  } = usePlanningLogging();
   const [activeTab, setActiveTab] = useState<'calendar' | 'intelligent'>('calendar');
+  const [autoAssignmentEnabled, setAutoAssignmentEnabled] = useState(true);
+  
+  // Auto-assignment when treated anomalies or windows change
+  useEffect(() => {
+    if (autoAssignmentEnabled && treatedAnomalies.length > 0 && maintenanceWindows.length > 0) {
+      performAutoAssignment();
+    }
+  }, [treatedAnomalies, maintenanceWindows, autoAssignmentEnabled]);
   
   // Auto-scheduling status indicator
   useEffect(() => {
@@ -32,10 +53,51 @@ export const Planning: React.FC = () => {
       toast.dismiss('auto-schedule');
     }
   }, [intelligentPlanning.schedulingInProgress]);
+
+  const performAutoAssignment = async () => {
+    const startTime = Date.now();
+    
+    try {
+      const results = AutoPlanningService.autoAssignTreatedAnomalies(
+        treatedAnomalies, // Use only treated anomalies
+        maintenanceWindows,
+        actionPlans
+      );
+
+      // Update anomalies with new assignments
+      results.updatedAnomalies.forEach(anomaly => {
+        const original = anomalies.find(a => a.id === anomaly.id);
+        if (original && original.maintenanceWindowId !== anomaly.maintenanceWindowId) {
+          updateAnomaly(anomaly.id, { maintenanceWindowId: anomaly.maintenanceWindowId });
+        }
+      });
+
+      // Update windows with assigned anomalies
+      results.updatedWindows.forEach(window => {
+        const original = maintenanceWindows.find(w => w.id === window.id);
+        if (original && window.assignedAnomalies && 
+            window.assignedAnomalies.length !== (original.assignedAnomalies?.length || 0)) {
+          updateMaintenanceWindow(window.id, window);
+        }
+      });
+
+      // Show results if there were assignments
+      if (results.assignmentResults.length > 0) {
+        AutoPlanningService.showAssignmentResults(results.assignmentResults);
+      }
+
+      // Log the auto-scheduling action
+      const duration = Date.now() - startTime;
+      await logAutoScheduling(results.assignmentResults.length, duration);
+      
+    } catch (error) {
+      await logError(error as Error, 'auto-assignment');
+    }
+  };
   
-  const handleSchedule = (windowId: string, anomalyId: string) => {
+  const handleSchedule = async (windowId: string, anomalyId: string) => {
     // Find the anomaly and window
-    const anomaly = anomalies.find(a => a.id === anomalyId);
+    const anomaly = treatedAnomalies.find(a => a.id === anomalyId);
     const window = maintenanceWindows.find(w => w.id === windowId);
     
     if (!anomaly || !window) {
@@ -43,11 +105,18 @@ export const Planning: React.FC = () => {
       return;
     }
     
-    // Update the anomaly with the maintenance window assignment
-    updateAnomaly(anomalyId, { maintenanceWindowId: windowId });
-    
-    toast.success(`Anomalie "${anomaly.title}" assignée à la fenêtre de maintenance`);
-    console.log('Schedule anomaly:', anomalyId, 'to window:', windowId);
+    try {
+      // Update the anomaly with the maintenance window assignment
+      updateAnomaly(anomalyId, { maintenanceWindowId: windowId });
+      
+      // Log the manual scheduling action
+      await logManualScheduling(anomalyId, windowId);
+      
+      toast.success(`Anomalie "${anomaly.title}" assignée à la fenêtre de maintenance`);
+      console.log('Schedule anomaly:', anomalyId, 'to window:', windowId);
+    } catch (error) {
+      await logError(error as Error, 'manual-scheduling');
+    }
   };
   
   const handleCreateWindow = () => {
@@ -140,6 +209,42 @@ export const Planning: React.FC = () => {
       toast('Aucune anomalie critique en attente de programmation');
     }
   };
+
+  const handleAutoAssignTreated = () => {
+    // Find all treated anomalies not yet assigned
+    const treatedUnassigned = anomalies.filter(a => 
+      a.status === 'treated' && !a.maintenanceWindowId
+    );
+
+    if (treatedUnassigned.length === 0) {
+      toast('Aucune anomalie traitée en attente d\'assignation');
+      return;
+    }
+
+    // Check if we have open windows
+    const openWindows = maintenanceWindows.filter(w => 
+      w.status === 'planned' || w.status === 'in_progress'
+    );
+
+    if (openWindows.length === 0) {
+      // Create windows for treated anomalies
+      const newWindows = AutoPlanningService.createWindowForTreatedAnomalies(treatedUnassigned, actionPlans);
+      
+      newWindows.forEach(window => {
+        addMaintenanceWindow(window);
+      });
+
+      toast.success(`${newWindows.length} fenêtres automatiques créées pour ${treatedUnassigned.length} anomalies traitées`);
+    } else {
+      // Assign to existing windows
+      performAutoAssignment();
+    }
+  };
+
+  const handleToggleAutoAssignment = () => {
+    setAutoAssignmentEnabled(!autoAssignmentEnabled);
+    toast(autoAssignmentEnabled ? 'Auto-assignation désactivée' : 'Auto-assignation activée');
+  };
   
   return (
     <div className="space-y-6">
@@ -171,6 +276,10 @@ export const Planning: React.FC = () => {
             <Settings className="h-4 w-4 mr-2" />
             Optimiser IA
           </Button>
+          <Button variant="outline" onClick={handleAutoAssignTreated}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Assigner Traitées
+          </Button>
           <Button variant="outline" onClick={handleCreateAutomaticWindow}>
             <Zap className="h-4 w-4 mr-2" />
             Arrêt Auto
@@ -190,8 +299,38 @@ export const Planning: React.FC = () => {
               {intelligentPlanning.autoScheduleEnabled ? 'Désactiver' : 'Activer'}
             </Button>
           </div>
+          <div className="flex items-center space-x-2">
+            <div className={`h-2 w-2 rounded-full ${
+              autoAssignmentEnabled ? 'bg-blue-500' : 'bg-gray-400'
+            }`} />
+            <span className="text-sm text-gray-600">
+              Auto-assign: {autoAssignmentEnabled ? 'ON' : 'OFF'}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleAutoAssignment}
+            >
+              {autoAssignmentEnabled ? 'Désactiver' : 'Activer'}
+            </Button>
+          </div>
         </div>
       </div>
+      
+      {/* Treated Anomalies Status */}
+      <TreatedAnomaliesStatus
+        anomalies={anomalies}
+        maintenanceWindows={maintenanceWindows}
+        onAutoAssign={handleAutoAssignTreated}
+        onCreateWindow={() => {
+          const treatedUnassigned = anomalies.filter(a => 
+            a.status === 'treated' && !a.maintenanceWindowId
+          );
+          const newWindows = AutoPlanningService.createWindowForTreatedAnomalies(treatedUnassigned, actionPlans);
+          newWindows.forEach(window => addMaintenanceWindow(window));
+          toast.success(`${newWindows.length} fenêtres créées pour anomalies traitées`);
+        }}
+      />
       
       {activeTab === 'calendar' ? (
         <CalendarView 

@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { supabaseChatService } from '../../services/supabaseChatService';
+import { useChatLogging } from '../../hooks/useLogging';
 import { toast } from 'react-hot-toast';
 
 interface ChatMessage {
@@ -14,6 +15,7 @@ interface ChatMessage {
 }
 
 export const ChatInterface: React.FC = () => {
+  const { logMessageSent, logAIResponse, logError } = useChatLogging();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -61,7 +63,12 @@ export const ChatInterface: React.FC = () => {
     setInputMessage('');
     setIsTyping(true);
     
+    const startTime = Date.now();
+    
     try {
+      // Log the user message
+      await logMessageSent(currentMessage, currentMessage.length);
+      
       // Get AI response from Supabase service
       const context = await buildMessageContext(currentMessage);
       const response = await supabaseChatService.getAIResponse(currentMessage, context);
@@ -78,8 +85,16 @@ export const ChatInterface: React.FC = () => {
       // Save conversation to database
       await supabaseChatService.saveChatMessage(currentMessage, response, context);
       
+      // Log the AI response
+      const duration = Date.now() - startTime;
+      await logAIResponse(response.length, duration);
+      
     } catch (error) {
       console.error('Error getting AI response:', error);
+      
+      // Log the error
+      await logError(error as Error, 'chat-message-processing');
+      
       const errorResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'bot',

@@ -12,6 +12,7 @@ import { Planning } from './pages/Planning';
 import { Import } from './pages/Import';
 import { Chat } from './pages/Chat';
 import { Profile } from './pages/Profile';
+import LogsPage from './pages/Logs';
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
                 <Route path="/import" element={<Import />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/logs" element={<LogsPage />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

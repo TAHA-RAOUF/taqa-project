@@ -9,7 +9,8 @@ import {
   Bell,
   User,
   LogOut,
-  Settings
+  Settings,
+  FileText
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../contexts/AuthContext';
@@ -24,6 +25,7 @@ export const Header: React.FC = () => {
     { name: 'Planning', href: '/planning', icon: Calendar },
     { name: 'Import', href: '/import', icon: Upload },
     { name: 'Chat AI', href: '/chat', icon: MessageCircle },
+    { name: 'Logs', href: '/logs', icon: FileText },
   ];
   
   return (

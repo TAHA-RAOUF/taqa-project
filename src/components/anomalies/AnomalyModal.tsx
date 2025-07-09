@@ -6,7 +6,7 @@ import { Select } from '../ui/Select';
 import { Badge } from '../ui/Badge';
 import { Card, CardContent } from '../ui/Card';
 import { Anomaly } from '../../types';
-import { calculateCriticality } from '../../lib/utils';
+import { calculateCriticalityLevel } from '../../lib/scoringUtils';
 
 interface AnomalyModalProps {
   isOpen: boolean;
@@ -31,18 +31,17 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
     originSource: '',
     estimatedHours: 0,
     priority: 1,
-    fiabiliteScore: 5.0,
-    integriteScore: 5.0,
-    disponibiliteScore: 5.0,
-    processSafetyScore: 5.0,
+    // New combined scoring system
+    fiabiliteIntegriteScore: 2.5,
+    disponibiliteScore: 2.5,
+    processSafetyScore: 2.5,
     useUserScores: false
   });
 
   const [aiScores, setAiScores] = useState({
-    fiabiliteScore: 5.0,
-    integriteScore: 5.0,
-    disponibiliteScore: 5.0,
-    processSafetyScore: 5.0,
+    fiabiliteIntegriteScore: 2.5,
+    disponibiliteScore: 2.5,
+    processSafetyScore: 2.5,
     criticalityLevel: 'medium' as 'low' | 'medium' | 'high' | 'critical'
   });
 
@@ -58,16 +57,14 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
         originSource: editAnomaly.originSource,
         estimatedHours: editAnomaly.estimatedHours || 0,
         priority: editAnomaly.priority || 1,
-        fiabiliteScore: editAnomaly.userFiabiliteScore || editAnomaly.fiabiliteScore,
-        integriteScore: editAnomaly.userIntegriteScore || editAnomaly.integriteScore,
+        fiabiliteIntegriteScore: editAnomaly.userFiabiliteIntegriteScore || editAnomaly.fiabiliteIntegriteScore,
         disponibiliteScore: editAnomaly.userDisponibiliteScore || editAnomaly.disponibiliteScore,
         processSafetyScore: editAnomaly.userProcessSafetyScore || editAnomaly.processSafetyScore,
         useUserScores: editAnomaly.useUserScores || false
       });
 
       setAiScores({
-        fiabiliteScore: editAnomaly.fiabiliteScore,
-        integriteScore: editAnomaly.integriteScore,
+        fiabiliteIntegriteScore: editAnomaly.fiabiliteIntegriteScore,
         disponibiliteScore: editAnomaly.disponibiliteScore,
         processSafetyScore: editAnomaly.processSafetyScore,
         criticalityLevel: editAnomaly.criticalityLevel
@@ -84,19 +81,17 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
         originSource: '',
         estimatedHours: 0,
         priority: 1,
-        fiabiliteScore: 5.0,
-        integriteScore: 5.0,
-        disponibiliteScore: 5.0,
-        processSafetyScore: 5.0,
+        fiabiliteIntegriteScore: 2.5,
+        disponibiliteScore: 2.5,
+        processSafetyScore: 2.5,
         useUserScores: false
       });
 
       // Simulate AI prediction for new anomaly
       setAiScores({
-        fiabiliteScore: Math.random() * 4 + 3, // 3-7 range
-        integriteScore: Math.random() * 4 + 3,
-        disponibiliteScore: Math.random() * 4 + 3,
-        processSafetyScore: Math.random() * 4 + 3,
+        fiabiliteIntegriteScore: Math.random() * 2 + 2.5, // 2.5-4.5 range
+        disponibiliteScore: Math.random() * 2 + 2.5,
+        processSafetyScore: Math.random() * 2 + 2.5,
         criticalityLevel: 'medium'
       });
     }
@@ -133,9 +128,8 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
 
   const getCurrentCriticality = () => {
     const scores = formData.useUserScores ? formData : aiScores;
-    return calculateCriticality(
-      scores.fiabiliteScore,
-      scores.integriteScore,
+    return calculateCriticalityLevel(
+      scores.fiabiliteIntegriteScore,
       scores.disponibiliteScore,
       scores.processSafetyScore
     );
@@ -168,15 +162,13 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
       priority: formData.priority,
       
       // AI Scores (always preserved)
-      fiabiliteScore: aiScores.fiabiliteScore,
-      integriteScore: aiScores.integriteScore,
+      fiabiliteIntegriteScore: aiScores.fiabiliteIntegriteScore,
       disponibiliteScore: aiScores.disponibiliteScore,
       processSafetyScore: aiScores.processSafetyScore,
       criticalityLevel: aiScores.criticalityLevel,
       
       // User overrides
-      userFiabiliteScore: formData.useUserScores ? formData.fiabiliteScore : undefined,
-      userIntegriteScore: formData.useUserScores ? formData.integriteScore : undefined,
+      userFiabiliteIntegriteScore: formData.useUserScores ? formData.fiabiliteIntegriteScore : undefined,
       userDisponibiliteScore: formData.useUserScores ? formData.disponibiliteScore : undefined,
       userProcessSafetyScore: formData.useUserScores ? formData.processSafetyScore : undefined,
       userCriticalityLevel: formData.useUserScores ? currentCriticality : undefined,
@@ -318,41 +310,23 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-600 mb-2">Fiabilité</p>
+                  <p className="text-sm text-blue-600 mb-2">Fiabilité + Intégrité</p>
                   {formData.useUserScores ? (
                     <input
                       type="number"
                       min="0"
-                      max="10"
+                      max="5"
                       step="0.1"
-                      value={formData.fiabiliteScore}
-                      onChange={(e) => handleScoreChange('fiabiliteScore', parseFloat(e.target.value))}
+                      value={formData.fiabiliteIntegriteScore}
+                      onChange={(e) => handleScoreChange('fiabiliteIntegriteScore', parseFloat(e.target.value))}
                       className="w-full text-center text-xl font-bold text-blue-900 bg-transparent border-b-2 border-blue-300 focus:outline-none focus:border-blue-500"
                     />
                   ) : (
-                    <p className="text-xl font-bold text-blue-900">{aiScores.fiabiliteScore.toFixed(1)}</p>
+                    <p className="text-xl font-bold text-blue-900">{aiScores.fiabiliteIntegriteScore.toFixed(1)}</p>
                   )}
-                  <div className="text-xs text-blue-600 mt-1">/10</div>
-                </div>
-
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <p className="text-sm text-green-600 mb-2">Intégrité</p>
-                  {formData.useUserScores ? (
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      step="0.1"
-                      value={formData.integriteScore}
-                      onChange={(e) => handleScoreChange('integriteScore', parseFloat(e.target.value))}
-                      className="w-full text-center text-xl font-bold text-green-900 bg-transparent border-b-2 border-green-300 focus:outline-none focus:border-green-500"
-                    />
-                  ) : (
-                    <p className="text-xl font-bold text-green-900">{aiScores.integriteScore.toFixed(1)}</p>
-                  )}
-                  <div className="text-xs text-green-600 mt-1">/10</div>
+                  <div className="text-xs text-blue-600 mt-1">/5</div>
                 </div>
 
                 <div className="text-center p-4 bg-orange-50 rounded-lg">
@@ -361,7 +335,7 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
                     <input
                       type="number"
                       min="0"
-                      max="10"
+                      max="5"
                       step="0.1"
                       value={formData.disponibiliteScore}
                       onChange={(e) => handleScoreChange('disponibiliteScore', parseFloat(e.target.value))}
@@ -394,7 +368,7 @@ export const AnomalyModal: React.FC<AnomalyModalProps> = ({
 
               <div className="mt-4 text-center">
                 <div className="text-sm text-gray-500">
-                  Score moyen: {(((currentScores.fiabiliteScore + currentScores.integriteScore) / 2 + currentScores.disponibiliteScore + currentScores.processSafetyScore) / 3).toFixed(1)}/5
+                  Score moyen: {((currentScores.fiabiliteIntegriteScore + currentScores.disponibiliteScore + currentScores.processSafetyScore) / 3).toFixed(1)}/5
                 </div>
               </div>
             </CardContent>

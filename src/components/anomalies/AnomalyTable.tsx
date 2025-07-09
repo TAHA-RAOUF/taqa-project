@@ -74,9 +74,9 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   };
   
   const filteredAnomalies = anomalies.filter(anomaly => {
-    const matchesSearch = anomaly.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         anomaly.equipmentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         anomaly.responsiblePerson.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (anomaly.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (anomaly.equipmentId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (anomaly.responsiblePerson || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || anomaly.status === statusFilter;
     const matchesService = serviceFilter === 'all' || anomaly.service === serviceFilter;
     
@@ -86,6 +86,11 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   const sortedAnomalies = [...filteredAnomalies].sort((a, b) => {
     const aValue = a[sortField];
     const bValue = b[sortField];
+    
+    // Handle undefined/null values
+    if (aValue == null && bValue == null) return 0;
+    if (aValue == null) return sortDirection === 'asc' ? -1 : 1;
+    if (bValue == null) return sortDirection === 'asc' ? 1 : -1;
     
     if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
     if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
@@ -106,8 +111,8 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
       // Create CSV content
       const headers = [
         'ID',
-        'Titre',
         'Équipement',
+        'Description',
         'Service',
         'Responsable',
         'Statut',
@@ -124,15 +129,15 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
         headers.join(','),
         ...sortedAnomalies.map(anomaly => [
           anomaly.id,
-          `"${anomaly.title.replace(/"/g, '""')}"`,
-          anomaly.equipmentId,
-          anomaly.service,
-          `"${anomaly.responsiblePerson.replace(/"/g, '""')}"`,
-          anomaly.status,
-          anomaly.criticalityLevel,
-          ((anomaly.fiabiliteScore + anomaly.integriteScore) / 2).toFixed(1),
-          anomaly.disponibiliteScore.toFixed(1),
-          anomaly.processSafetyScore.toFixed(1),
+          anomaly.equipmentId || '',
+          `"${(anomaly.description || '').replace(/"/g, '""')}"`,
+          anomaly.service || '',
+          `"${(anomaly.responsiblePerson || '').replace(/"/g, '""')}"`,
+          anomaly.status || '',
+          anomaly.criticalityLevel || '',
+          (anomaly.fiabiliteIntegriteScore || 0).toFixed(1),
+          (anomaly.disponibiliteScore || 0).toFixed(1),
+          (anomaly.processSafetyScore || 0).toFixed(1),
           formatDate(anomaly.createdAt),
           anomaly.estimatedHours || 0,
           anomaly.priority || 1
@@ -178,7 +183,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
-              placeholder="Rechercher par titre, équipement, ou responsable..."
+              placeholder="Rechercher par description, équipement, ou responsable..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -204,17 +209,17 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <button
-                    onClick={() => handleSort('title')}
+                    onClick={() => handleSort('equipmentId')}
                     className="flex items-center space-x-1 hover:text-gray-700"
                   >
-                    <span>Titre</span>
-                    {sortField === 'title' && (
+                    <span>Équipement</span>
+                    {sortField === 'equipmentId' && (
                       sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
                     )}
                   </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Équipement
+                  Description
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Service
@@ -247,25 +252,27 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className={`w-2 h-2 rounded-full mr-3 ${getCriticalityColor(anomaly.criticalityLevel)}`} />
-                      <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
-                        {anomaly.title}
+                      <div className="text-sm font-medium text-gray-900">
+                        {anomaly.equipmentId || 'N/A'}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {anomaly.equipmentId}
+                  <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                    <div className="truncate" title={anomaly.description || 'N/A'}>
+                      {anomaly.description || 'N/A'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {anomaly.service}
+                    {anomaly.service || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getBadgeVariant(anomaly.criticalityLevel)}>
-                      {anomaly.criticalityLevel}
+                    <Badge variant={getBadgeVariant(anomaly.criticalityLevel || 'low')}>
+                      {anomaly.criticalityLevel || 'low'}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getStatusVariant(anomaly.status)}>
-                      {anomaly.status}
+                    <Badge variant={getStatusVariant(anomaly.status || 'new')}>
+                      {anomaly.status || 'new'}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -273,11 +280,11 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center space-x-2">
-                      <Button variant="ghost" size="sm" asChild>
-                        <Link to={`/anomaly/${anomaly.id}`}>
+                      <Link to={`/anomaly/${anomaly.id}`}>
+                        <Button variant="ghost" size="sm">
                           <Eye className="w-4 h-4" />
-                        </Link>
-                      </Button>
+                        </Button>
+                      </Link>
                       {onEdit && (
                         <Button variant="ghost" size="sm" onClick={() => onEdit(anomaly)}>
                           <Edit className="w-4 h-4" />
