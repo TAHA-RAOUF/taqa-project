@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -22,7 +22,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { ActionPlanModal } from '../components/anomalies/ActionPlanModal';
 import { useData } from '../contexts/DataContext';
-import { formatDateTime, getCriticalityColor, calculateCriticality } from '../lib/utils';
+import { formatDateTime, getCriticalityColor } from '../lib/utils';
 import { ActionPlan } from '../types';
 import { planningIntegration } from '../lib/planningUtils';
 import toast from 'react-hot-toast';
@@ -30,14 +30,14 @@ import toast from 'react-hot-toast';
 export const AnomalyDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getAnomalyById, updateAnomaly, addActionPlan, updateActionPlan, actionPlans } = useData();
+  const { getAnomalyById, addActionPlan, updateActionPlan, actionPlans, getActionPlanByAnomalyId } = useData();
   
   // Find the anomaly (in a real app, this would be fetched from an API)
   const anomaly = id ? getAnomalyById(id) : undefined;
   
   const [showActionPlan, setShowActionPlan] = useState(false);
   const [newComment, setNewComment] = useState('');
-  const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(anomaly?.actionPlan);
+  const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(undefined);
   const [editingScores, setEditingScores] = useState(false);
   const [aiScores, setAiScores] = useState({
     fiabiliteIntegriteScore: anomaly?.fiabiliteIntegriteScore || 0,
@@ -58,6 +58,24 @@ export const AnomalyDetail: React.FC = () => {
     priority: anomaly?.priority || 1,
     estimatedHours: anomaly?.estimatedHours || 0
   });
+
+  // Load action plan when component mounts
+  useEffect(() => {
+    const loadActionPlan = async () => {
+      if (anomaly?.id) {
+        try {
+          const plan = await getActionPlanByAnomalyId(anomaly.id);
+          if (plan) {
+            setActionPlan(plan);
+          }
+        } catch (error) {
+          console.error('Error loading action plan:', error);
+        }
+      }
+    };
+
+    loadActionPlan();
+  }, [anomaly?.id, getActionPlanByAnomalyId]);
 
   const statusOptions = [
     { value: 'new', label: 'Nouveau' },
@@ -100,18 +118,53 @@ export const AnomalyDetail: React.FC = () => {
     }
   };
 
-  const handleSaveActionPlan = (actionPlan: any) => {
-    // In a real app, this would save the action plan via API
-    console.log('Saving action plan:', actionPlan);
-    
-    if (actionPlan.id && actionPlans.find(p => p.id === actionPlan.id)) {
-      updateActionPlan(actionPlan.id, actionPlan);
-    } else {
-      addActionPlan(actionPlan);
+  const handleSaveActionPlan = async (actionPlan: ActionPlan) => {
+    try {
+      console.log('Saving action plan:', actionPlan);
+      
+      if (actionPlan.id && actionPlans.find(p => p.id === actionPlan.id)) {
+        // Update existing action plan
+        await updateActionPlan(actionPlan.id, {
+          needsOutage: actionPlan.needsOutage,
+          outageType: actionPlan.outageType,
+          outageDuration: actionPlan.outageDuration,
+          plannedDate: actionPlan.plannedDate,
+          estimatedCost: actionPlan.estimatedCost,
+          priority: actionPlan.priority,
+          comments: actionPlan.comments,
+          status: actionPlan.status
+        });
+      } else {
+        // Create new action plan
+        await addActionPlan({
+          anomalyId: anomaly.id,
+          needsOutage: actionPlan.needsOutage,
+          outageType: actionPlan.outageType,
+          outageDuration: actionPlan.outageDuration,
+          plannedDate: actionPlan.plannedDate,
+          estimatedCost: actionPlan.estimatedCost || 0,
+          priority: actionPlan.priority,
+          comments: actionPlan.comments || '',
+          actions: actionPlan.actions.map(action => ({
+            action: action.action,
+            responsable: action.responsable,
+            pdrsDisponible: action.pdrsDisponible,
+            ressourcesInternes: action.ressourcesInternes,
+            ressourcesExternes: action.ressourcesExternes,
+            dureeHeures: action.dureeHeures,
+            dureeJours: action.dureeJours,
+            dateDebut: action.dateDebut,
+            dateFin: action.dateFin
+          }))
+        });
+      }
+      
+      setActionPlan(actionPlan);
+      toast.success('Plan d\'action sauvegardé avec succès');
+    } catch (error) {
+      console.error('Error saving action plan:', error);
+      toast.error('Erreur lors de la sauvegarde du plan d\'action');
     }
-    
-    setActionPlan(actionPlan);
-    toast.success('Plan d\'action sauvegardé avec succès');
   };
 
   const handleUpdatePlanning = (actionPlan: ActionPlan) => {

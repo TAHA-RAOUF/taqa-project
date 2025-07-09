@@ -149,7 +149,7 @@ export class LoggingService {
 					query = query.lte('timestamp', filter.endDate.toISOString());
 				}
 				if (filter.userId) {
-					query = query.eq('userId', filter.userId);
+					query = query.eq('user_id', filter.userId);
 				}
 				if (filter.action) {
 					query = query.eq('action', filter.action);
@@ -175,7 +175,25 @@ export class LoggingService {
 				return this.getLogsFromLocalStorage(filter, limit, offset);
 			}
 
-			return data || [];
+			// Convert Supabase data to LogEntry format
+			return (data || []).map(row => ({
+				id: row.id,
+				timestamp: new Date(row.timestamp),
+				userId: row.user_id,
+				username: row.username,
+				action: row.action,
+				category: row.category,
+				entity: row.entity,
+				entityId: row.entity_id,
+				details: row.details,
+				severity: row.severity,
+				ipAddress: row.ip_address,
+				userAgent: row.user_agent,
+				sessionId: row.session_id,
+				success: row.success,
+				errorMessage: row.error_message,
+				metadata: row.metadata
+			}));
 		} catch (error) {
 			console.error('Error fetching logs:', error);
 			return this.getLogsFromLocalStorage(filter, limit, offset);

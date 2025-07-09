@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Anomaly, MaintenanceWindow, ActionPlan } from '../types';
 import { mockMaintenanceWindows } from '../data/mockData';
 import { anomalyService } from '../services/anomalyService';
+import { loggingService } from '../services/loggingService';
+import { supabaseActionPlanService, CreateActionPlanData, UpdateActionPlanData } from '../services/supabaseActionPlanService';
 import { generateId } from '../lib/utils';
 import toast from 'react-hot-toast';
 
@@ -20,9 +22,11 @@ interface DataContextType {
   
   // Action Plans
   actionPlans: ActionPlan[];
-  addActionPlan: (plan: Omit<ActionPlan, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  updateActionPlan: (id: string, updates: Partial<ActionPlan>) => void;
-  deleteActionPlan: (id: string) => void;
+  addActionPlan: (data: CreateActionPlanData) => Promise<void>;
+  updateActionPlan: (id: string, updates: UpdateActionPlanData) => Promise<void>;
+  deleteActionPlan: (id: string) => Promise<void>;
+  getActionPlanByAnomalyId: (anomalyId: string) => Promise<ActionPlan | null>;
+  loadActionPlans: () => Promise<void>;
   
   // Utility functions
   getAnomalyById: (id: string) => Anomaly | undefined;
@@ -65,19 +69,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeData = async () => {
       setIsLoading(true);
       try {
+        // Initialize logging service
+        await loggingService.initialize();
+        
         // Load anomalies directly from Supabase
         const anomaliesResponse = await anomalyService.getAllAnomalies({ per_page: 1000 });
         
         setAnomalies(anomaliesResponse);
         setMaintenanceWindows(mockMaintenanceWindows); // Use mock data for now
-        setActionPlans([]); // Empty for now
+        
+        // Load action plans from Supabase
+        const actionPlansResponse = await supabaseActionPlanService.getAllActionPlans();
+        setActionPlans(actionPlansResponse);
+        
         setUseBackend(true);
         
         toast.success(`${anomaliesResponse.length} anomalies chargées depuis Supabase`);
+        
+        // Log successful data load
+        await loggingService.logAction({
+          action: 'data_import',
+          category: 'data_operation',
+          entity: 'system',
+          details: {
+            description: `Successfully loaded ${anomaliesResponse.length} anomalies from Supabase`,
+            additionalInfo: {
+              anomaliesCount: anomaliesResponse.length,
+              maintenanceWindowsCount: mockMaintenanceWindows.length
+            }
+          },
+          severity: 'success',
+          success: true
+        });
       } catch (error) {
         console.error('Failed to load data from Supabase:', error);
         setUseBackend(false);
         setAnomalies([]);
+        
+        // Log error
+        await loggingService.logAction({
+          action: 'data_import',
+          category: 'data_operation',
+          entity: 'system',
+          details: {
+            description: 'Failed to load data from Supabase',
+            additionalInfo: {
+              error: error instanceof Error ? error.message : 'Unknown error'
+            }
+          },
+          severity: 'error',
+          success: false,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        });
         setMaintenanceWindows(mockMaintenanceWindows);
         setActionPlans([]);
         
@@ -97,27 +140,88 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (newAnomaly) {
         setAnomalies(prev => [newAnomaly, ...prev]);
         toast.success('Anomalie créée avec succès');
+        
+        // Log successful anomaly creation
+        await loggingService.logAnomalyAction(
+          'create_anomaly',
+          newAnomaly.id,
+          {
+            description: `Created new anomaly for equipment ${newAnomaly.equipmentId}`,
+            additionalInfo: {
+              equipmentId: newAnomaly.equipmentId,
+              criticalityLevel: newAnomaly.criticalityLevel,
+              service: newAnomaly.service,
+              description: newAnomaly.description
+            }
+          },
+          true
+        );
         return;
       }
     } catch (error) {
       console.error('Failed to create anomaly:', error);
       toast.error('Erreur lors de la création de l\'anomalie');
+      
+      // Log error
+      await loggingService.logAnomalyAction(
+        'create_anomaly',
+        'unknown',
+        {
+          description: 'Failed to create anomaly',
+          additionalInfo: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            equipmentId: anomalyData.equipmentId || 'Unknown'
+          }
+        },
+        false
+      );
     }
   };
 
   const updateAnomaly = async (id: string, updates: Partial<Anomaly>) => {
     try {
+      const originalAnomaly = anomalies.find(a => a.id === id);
       const updatedAnomaly = await anomalyService.updateAnomaly(id, updates);
       if (updatedAnomaly) {
         setAnomalies(prev => prev.map(anomaly => 
           anomaly.id === id ? updatedAnomaly : anomaly
         ));
         toast.success('Anomalie mise à jour avec succès');
+        
+        // Log successful anomaly update
+        await loggingService.logAnomalyAction(
+          'update_anomaly',
+          id,
+          {
+            description: `Updated anomaly ${id}`,
+            oldValue: originalAnomaly,
+            newValue: updatedAnomaly,
+            additionalInfo: {
+              updatedFields: Object.keys(updates),
+              equipmentId: updatedAnomaly.equipmentId
+            }
+          },
+          true
+        );
         return;
       }
     } catch (error) {
       console.error('Failed to update anomaly:', error);
       toast.error('Erreur lors de la mise à jour de l\'anomalie');
+      
+      // Log error
+      await loggingService.logAnomalyAction(
+        'update_anomaly',
+        id,
+        {
+          description: 'Failed to update anomaly',
+          additionalInfo: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            updatedFields: Object.keys(updates)
+          }
+        },
+        false
+      );
     }
   };
 
@@ -164,53 +268,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Action Plan functions (simplified - stored within anomaly)
-  const addActionPlan = async (planData: Omit<ActionPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newPlan: ActionPlan = {
-      ...planData,
-      id: generateId(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    
-    // Store action plan in the anomaly record
-    await updateAnomaly(planData.anomalyId, {
-      actionPlan: newPlan,
-      hasActionPlan: true
-    });
-    
-    setActionPlans(prev => [...prev, newPlan]);
-    toast.success('Plan d\'action créé avec succès');
+  const addActionPlan = async (data: CreateActionPlanData) => {
+    try {
+      const newPlan = await supabaseActionPlanService.createActionPlan(data);
+      if (newPlan) {
+        setActionPlans(prev => [...prev, newPlan]);
+        
+        // Update anomaly to indicate it has an action plan
+        await updateAnomaly(data.anomalyId, {
+          hasActionPlan: true
+        });
+        
+        toast.success('Plan d\'action créé avec succès');
+      } else {
+        toast.error('Erreur lors de la création du plan d\'action');
+      }
+    } catch (error) {
+      console.error('Failed to create action plan:', error);
+      toast.error('Erreur lors de la création du plan d\'action');
+    }
   };
 
-  const updateActionPlan = async (id: string, updates: Partial<ActionPlan>) => {
-    const plan = actionPlans.find(p => p.id === id);
-    if (!plan) return;
-    
-    const updatedPlan = { ...plan, ...updates, updatedAt: new Date() };
-    
-    // Update the action plan in the anomaly record
-    await updateAnomaly(plan.anomalyId, {
-      actionPlan: updatedPlan
-    });
-    
-    setActionPlans(prev => prev.map(p => 
-      p.id === id ? updatedPlan : p
-    ));
-    toast.success('Plan d\'action mis à jour avec succès');
+  const updateActionPlan = async (id: string, updates: UpdateActionPlanData) => {
+    try {
+      const updatedPlan = await supabaseActionPlanService.updateActionPlan(id, updates);
+      if (updatedPlan) {
+        setActionPlans(prev => prev.map(p => 
+          p.id === id ? updatedPlan : p
+        ));
+        toast.success('Plan d\'action mis à jour avec succès');
+      } else {
+        toast.error('Erreur lors de la mise à jour du plan d\'action');
+      }
+    } catch (error) {
+      console.error('Failed to update action plan:', error);
+      toast.error('Erreur lors de la mise à jour du plan d\'action');
+    }
   };
 
   const deleteActionPlan = async (id: string) => {
-    const plan = actionPlans.find(p => p.id === id);
-    if (!plan) return;
-    
-    // Remove action plan from the anomaly record
-    await updateAnomaly(plan.anomalyId, {
-      actionPlan: undefined,
-      hasActionPlan: false
-    });
-    
-    setActionPlans(prev => prev.filter(plan => plan.id !== id));
-    toast.success('Plan d\'action supprimé avec succès');
+    try {
+      const plan = actionPlans.find(p => p.id === id);
+      if (!plan) return;
+      
+      const success = await supabaseActionPlanService.deleteActionPlan(id);
+      if (success) {
+        setActionPlans(prev => prev.filter(p => p.id !== id));
+        
+        // Update anomaly to indicate it no longer has an action plan
+        await updateAnomaly(plan.anomalyId, {
+          hasActionPlan: false
+        });
+        
+        toast.success('Plan d\'action supprimé avec succès');
+      } else {
+        toast.error('Erreur lors de la suppression du plan d\'action');
+      }
+    } catch (error) {
+      console.error('Failed to delete action plan:', error);
+      toast.error('Erreur lors de la suppression du plan d\'action');
+    }
+  };
+
+  const getActionPlanByAnomalyId = async (anomalyId: string): Promise<ActionPlan | null> => {
+    try {
+      return await supabaseActionPlanService.getActionPlan(anomalyId);
+    } catch (error) {
+      console.error('Failed to get action plan:', error);
+      return null;
+    }
+  };
+
+  const loadActionPlans = async () => {
+    try {
+      const plans = await supabaseActionPlanService.getAllActionPlans();
+      setActionPlans(plans);
+    } catch (error) {
+      console.error('Failed to load action plans:', error);
+    }
   };
 
   // Utility functions
@@ -269,6 +404,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addActionPlan,
     updateActionPlan,
     deleteActionPlan,
+    getActionPlanByAnomalyId,
+    loadActionPlans,
     
     // Utility functions
     getAnomalyById,
