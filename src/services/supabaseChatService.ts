@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-
-// Supabase configuration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from '../lib/supabase';
+import { llmService } from './llmService';
 
 // Database types based on your existing data structure
 export interface DatabaseAnomaly {
@@ -244,23 +239,10 @@ export class SupabaseChatService {
    */
   async getAIResponse(message: string, context: any): Promise<string> {
     try {
-      // Call Supabase Edge Function for AI processing
-      const { data, error } = await supabase.functions.invoke('chat-ai', {
-        body: {
-          message,
-          context,
-          timestamp: new Date().toISOString()
-        }
-      });
-
-      if (error) {
-        console.error('Edge Function error:', error);
-        return this.getFallbackResponse(message, context);
-      }
-
-      return data?.response || this.getFallbackResponse(message, context);
+      // Use LLM service instead of Supabase Edge Function
+      return await llmService.getChatCompletion(message, context);
     } catch (error) {
-      console.error('Error calling AI function:', error);
+      console.error('Error calling LLM service:', error);
       return this.getFallbackResponse(message, context);
     }
   }
