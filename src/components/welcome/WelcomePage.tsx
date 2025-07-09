@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
-  Shield, 
   BarChart3, 
   Users, 
-  Zap,
   CheckCircle,
   Eye,
   EyeOff,
@@ -103,7 +101,7 @@ export const WelcomePage: React.FC<WelcomePageProps> = ({ onLogin }) => {
         <div className="absolute top-2/3 right-1/3 w-2 h-2 bg-cyan-500 rounded-full animate-bounce delay-1000"></div>
       </div>
 
-      <div className="relative z-10 min-h-screen flex">
+      <div className="relative z-10 min-h-screen flex items-center">
         {/* Left Side - Branding and Features */}
         <div className={`flex-1 flex flex-col justify-center px-8 lg:px-16 transition-all duration-1000 transform ${
           isVisible ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'

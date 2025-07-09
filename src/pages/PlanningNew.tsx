@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Calendar, 
   BarChart3,
@@ -75,19 +75,8 @@ export const PlanningNew: React.FC = () => {
     [maintenanceWindows]
   );
 
-  // Auto-scheduling effect
-  useEffect(() => {
-    if (autoScheduleEnabled && unscheduledTreatedAnomalies.length > 0) {
-      const timer = setTimeout(() => {
-        handleAutoSchedule();
-      }, 2000); // Delay to prevent excessive calls
-
-      return () => clearTimeout(timer);
-    }
-  }, [unscheduledTreatedAnomalies, autoScheduleEnabled]);
-
   // Auto-schedule treated anomalies
-  const handleAutoSchedule = async () => {
+  const handleAutoSchedule = useCallback(async () => {
     if (unscheduledTreatedAnomalies.length === 0) return;
 
     try {
@@ -123,7 +112,18 @@ export const PlanningNew: React.FC = () => {
       console.error('Auto-scheduling error:', error);
       toast.error('Auto-scheduling failed');
     }
-  };
+  }, [unscheduledTreatedAnomalies, availableWindows, actionPlans, planningEngine, updateAnomaly]);
+
+  // Auto-scheduling effect
+  useEffect(() => {
+    if (autoScheduleEnabled && unscheduledTreatedAnomalies.length > 0) {
+      const timer = setTimeout(() => {
+        handleAutoSchedule();
+      }, 2000); // Delay to prevent excessive calls
+
+      return () => clearTimeout(timer);
+    }
+  }, [unscheduledTreatedAnomalies, autoScheduleEnabled, handleAutoSchedule]);
 
   // Manual scheduling
   const handleManualSchedule = async (anomalyId: string, windowId: string) => {
@@ -366,66 +366,85 @@ export const PlanningNew: React.FC = () => {
   }, [treatedAnomalies, maintenanceWindows, actionPlans]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Calendar className="h-8 w-8 text-blue-600" />
-              Smart Planning System
-            </h1>
-            <p className="text-gray-600 mt-2">
-              Intelligent maintenance scheduling with automatic treated anomaly management
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Auto-schedule toggle */}
-            <div className="flex items-center gap-2 bg-white rounded-lg p-3 shadow-sm">
-              <div className={`w-3 h-3 rounded-full ${autoScheduleEnabled ? 'bg-green-500' : 'bg-gray-400'}`} />
-              <span className="text-sm font-medium">Auto-Schedule</span>
-              <Button
-                variant={autoScheduleEnabled ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => setAutoScheduleEnabled(!autoScheduleEnabled)}
-              >
-                {autoScheduleEnabled ? 'ON' : 'OFF'}
-              </Button>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/20">
+      {/* Enhanced Header with Glass Effect */}
+      <div className="mb-8 relative">
+        {/* Background blur effect */}
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-sm border-b border-gray-200/50" />
+        
+        <div className="relative p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="space-y-2">
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 bg-clip-text text-transparent flex items-center gap-4">
+                <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg">
+                  <Calendar className="h-8 w-8 text-white" />
+                </div>
+                Smart Planning System
+              </h1>
+              <p className="text-gray-600 text-lg font-medium ml-16">
+                Intelligence artificielle pour la planification de maintenance avancée
+              </p>
             </div>
+            
+            <div className="flex items-center gap-4">
+              {/* Enhanced Auto-schedule toggle */}
+              <div className="flex items-center gap-3 bg-white/90 backdrop-blur-sm rounded-2xl p-4 shadow-lg border border-gray-200/50">
+                <div className={`w-4 h-4 rounded-full shadow-sm transition-all duration-300 ${
+                  autoScheduleEnabled 
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 shadow-green-200' 
+                    : 'bg-gray-400'
+                }`} />
+                <span className="text-sm font-semibold text-gray-700">Auto-Schedule</span>
+                <Button
+                  variant={autoScheduleEnabled ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => setAutoScheduleEnabled(!autoScheduleEnabled)}
+                  className={`transition-all duration-300 ${
+                    autoScheduleEnabled 
+                      ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {autoScheduleEnabled ? 'ON' : 'OFF'}
+                </Button>
+              </div>
 
-            {/* Quick actions */}
-            <QuickActions
-              onCreateWindow={() => handleCreateWindow()}
-              onOptimize={handleOptimizeScheduling}
-              onAutoSchedule={handleAutoSchedule}
-              unscheduledCount={unscheduledTreatedAnomalies.length}
-            />
+              {/* Enhanced Quick actions */}
+              <QuickActions
+                onCreateWindow={() => handleCreateWindow()}
+                onOptimize={handleOptimizeScheduling}
+                onAutoSchedule={handleAutoSchedule}
+                unscheduledCount={unscheduledTreatedAnomalies.length}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Navigation */}
-        <div className="flex items-center gap-2 bg-white rounded-lg p-1 shadow-sm w-fit">
-          {[
-            { id: 'overview', label: 'Overview', icon: BarChart3 },
-            { id: 'windows', label: 'Windows', icon: Calendar },
-            { id: 'analytics', label: 'Analytics', icon: Eye },
-            { id: 'algorithm', label: 'Algorithm', icon: Cpu }
-          ].map(tab => (
-            <Button
-              key={tab.id}
-              variant={activeView === tab.id ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setActiveView(tab.id as any)}
-              className="flex items-center gap-2"
-            >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-            </Button>
-          ))}
+          {/* Enhanced Navigation with Glass Effect */}
+          <div className="flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-2xl p-2 shadow-lg border border-gray-200/50 w-fit">
+            {[
+              { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3, color: 'blue' },
+              { id: 'windows', label: 'Fenêtres', icon: Calendar, color: 'indigo' },
+              { id: 'analytics', label: 'Analytiques', icon: Eye, color: 'purple' },
+              { id: 'algorithm', label: 'Algorithme', icon: Cpu, color: 'teal' }
+            ].map(tab => (
+              <Button
+                key={tab.id}
+                variant={activeView === tab.id ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveView(tab.id as any)}
+                className={`flex items-center gap-2 transition-all duration-300 ${
+                  activeView === tab.id 
+                    ? `bg-gradient-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-lg transform scale-105` 
+                    : 'hover:bg-gray-100/80 text-gray-700'
+                }`}
+              >
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
-
       {/* Stats Overview */}
       <PlanningStats
         treatedAnomalies={treatedAnomalies}
@@ -435,220 +454,243 @@ export const PlanningNew: React.FC = () => {
         totalWindows={maintenanceWindows.length}
       />
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
-        {/* Left Panel - Treated Anomalies */}
+      {/* Enhanced Main Content with Glass Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8 px-6">
+        {/* Left Panel - Treated Anomalies with Enhanced Styling */}
         <div className="lg:col-span-1">
-          <TreatedAnomaliesPanel
-            anomalies={treatedAnomalies}
-            unscheduledAnomalies={unscheduledTreatedAnomalies}
-            onSchedule={handleManualSchedule}
-            onCreateWindow={handleCreateWindow}
-            onBatchSchedule={handleBatchSchedule}
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            filterStatus={filterStatus}
-            onFilterChange={setFilterStatus}
-          />
+          <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden">
+            <TreatedAnomaliesPanel
+              anomalies={treatedAnomalies}
+              unscheduledAnomalies={unscheduledTreatedAnomalies}
+              onSchedule={handleManualSchedule}
+              onCreateWindow={handleCreateWindow}
+              onBatchSchedule={handleBatchSchedule}
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              filterStatus={filterStatus}
+              onFilterChange={setFilterStatus}
+            />
+          </div>
         </div>
 
-        {/* Right Panel - Windows Management */}
+        {/* Right Panel - Windows Management with Enhanced Styling */}
         <div className="lg:col-span-2">
-          {activeView === 'overview' && (
-            <WindowManagementGrid
-              windows={maintenanceWindows}
-              anomalies={treatedAnomalies}
-              actionPlans={actionPlans}
-              onScheduleAnomaly={handleManualSchedule}
-              onCreateWindow={handleCreateWindow}
-              onUpdateWindow={updateMaintenanceWindow}
-              onViewWindow={handleViewWindow}
-              onEditWindow={handleEditWindow}
-            />
-          )}
+          <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden">
+            {activeView === 'overview' && (
+              <WindowManagementGrid
+                windows={maintenanceWindows}
+                anomalies={treatedAnomalies}
+                actionPlans={actionPlans}
+                onScheduleAnomaly={handleManualSchedule}
+                onCreateWindow={handleCreateWindow}
+                onUpdateWindow={updateMaintenanceWindow}
+                onViewWindow={handleViewWindow}
+                onEditWindow={handleEditWindow}
+              />
+            )}
 
-          {activeView === 'windows' && (
-            <CalendarPlanningView
-              windows={maintenanceWindows}
-              anomalies={treatedAnomalies}
-              actionPlans={actionPlans}
-              onViewWindow={handleViewWindow}
-              onEditWindow={handleEditWindow}
-              onCreateWindow={handleCreateWindow}
-            />
-          )}
+            {activeView === 'windows' && (
+              <CalendarPlanningView
+                windows={maintenanceWindows}
+                anomalies={treatedAnomalies}
+                actionPlans={actionPlans}
+                onViewWindow={handleViewWindow}
+                onEditWindow={handleEditWindow}
+                onCreateWindow={handleCreateWindow}
+              />
+            )}
 
-          {activeView === 'analytics' && (
-            <PlanningAnalytics
-              windows={maintenanceWindows}
-              anomalies={anomalies}
-              actionPlans={actionPlans}
-            />
-          )}
+            {activeView === 'analytics' && (
+              <PlanningAnalytics
+                windows={maintenanceWindows}
+                anomalies={anomalies}
+                actionPlans={actionPlans}
+              />
+            )}
 
-          {activeView === 'algorithm' && (
-            <div className="space-y-6">
-              {/* Algorithm Overview Card */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-3 bg-blue-600 rounded-lg">
-                    <Cpu className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">Algorithme de Planification Intelligent</h2>
-                    <p className="text-gray-600">Optimisation multi-contraintes avec pondération dynamique</p>
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-white rounded-lg p-4 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Target className="h-4 w-4 text-blue-600" />
-                      <span className="font-medium text-gray-900">Algorithme</span>
+            {activeView === 'algorithm' && (
+              <div className="p-6 space-y-8">
+                {/* Enhanced Algorithm Overview Card */}
+                <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-8 border border-blue-200/50 shadow-lg">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="p-4 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl shadow-lg">
+                      <Cpu className="h-8 w-8 text-white" />
                     </div>
-                    <p className="text-sm text-gray-600">Weighted Shortest Processing Time + Contraintes multiples</p>
+                    <div>
+                      <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-700 to-purple-700 bg-clip-text text-transparent">
+                        Algorithme de Planification Intelligent
+                      </h2>
+                      <p className="text-gray-600 font-medium">Optimisation multi-contraintes avec pondération dynamique</p>
+                    </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="h-4 w-4 text-green-600" />
-                      <span className="font-medium text-gray-900">Optimisation</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Ratio Urgence/Temps + Équilibrage des charges</p>
-                  </div>
-                  
-                  <div className="bg-white rounded-lg p-4 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Zap className="h-4 w-4 text-purple-600" />
-                      <span className="font-medium text-gray-900">Performance</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Efficacité {planningAlgorithm.windowAnalysis.length > 0 ? Math.round(planningAlgorithm.windowAnalysis.reduce((sum, w) => sum + w.efficiencyScore, 0) / planningAlgorithm.windowAnalysis.length) : 0}%</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Algorithm Results */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Sorted Anomalies by Priority */}
-                <div className="bg-white rounded-xl shadow-sm border p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <Target className="h-5 w-5 text-blue-600" />
-                    Priorités Calculées
-                  </h3>
-                  
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {planningAlgorithm.sortedAnomalies.slice(0, 10).map((anomaly, index) => (
-                      <div key={anomaly.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900 text-sm">{anomaly.title}</p>
-                            <p className="text-xs text-gray-500">{anomaly.equipmentId}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="text-right">
-                          <div className="text-sm font-bold text-blue-600">
-                            {anomaly.efficiency.toFixed(2)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Score: {anomaly.urgencyScore}
-                          </div>
-                        </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-blue-100/50 shadow-md">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Target className="h-6 w-6 text-blue-600" />
+                        <span className="font-bold text-gray-900">Algorithme</span>
                       </div>
-                    ))}
+                      <p className="text-sm text-gray-600 leading-relaxed">Weighted Shortest Processing Time + Contraintes multiples</p>
+                    </div>
+                    
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-green-100/50 shadow-md">
+                      <div className="flex items-center gap-3 mb-3">
+                        <TrendingUp className="h-6 w-6 text-green-600" />
+                        <span className="font-bold text-gray-900">Optimisation</span>
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">Ratio Urgence/Temps + Équilibrage des charges</p>
+                    </div>
+                    
+                    <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-purple-100/50 shadow-md">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Zap className="h-6 w-6 text-purple-600" />
+                        <span className="font-bold text-gray-900">Performance</span>
+                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                        Efficacité {planningAlgorithm.windowAnalysis.length > 0 ? Math.round(planningAlgorithm.windowAnalysis.reduce((sum, w) => sum + w.efficiencyScore, 0) / planningAlgorithm.windowAnalysis.length) : 0}%
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {/* Window Analysis */}
-                <div className="bg-white rounded-xl shadow-sm border p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-green-600" />
-                    Analyse des Fenêtres
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {planningAlgorithm.windowAnalysis.map((window) => (
-                      <div key={window.id} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <h4 className="font-medium text-gray-900">{window.type.toUpperCase()}</h4>
-                            <p className="text-sm text-gray-500">{window.assignedAnomalies.length} anomalies</p>
+                {/* Enhanced Algorithm Results */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Enhanced Sorted Anomalies by Priority */}
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-6">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
+                        <Target className="h-6 w-6 text-white" />
+                      </div>
+                      Priorités Calculées
+                    </h3>
+                    
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {planningAlgorithm.sortedAnomalies.slice(0, 10).map((anomaly, index) => (
+                        <div key={anomaly.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-blue-50/50 rounded-xl border border-gray-200/50 hover:shadow-md transition-all duration-300">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-bold shadow-lg">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{anomaly.title}</p>
+                              <p className="text-xs text-gray-500">{anomaly.equipmentId}</p>
+                            </div>
                           </div>
+                          
                           <div className="text-right">
-                            <div className="text-sm font-bold">{window.utilization.toFixed(1)}%</div>
-                            <div className="text-xs text-gray-500">Score: {window.overallScore.toFixed(1)}</div>
+                            <div className="text-sm font-bold text-blue-600">
+                              {anomaly.efficiency.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              Score: {anomaly.urgencyScore}
+                            </div>
                           </div>
                         </div>
-                        
-                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-                          <div 
-                            className={`h-2 rounded-full ${
-                              window.utilization > 100 ? 'bg-red-500' :
-                              window.utilization > 85 ? 'bg-yellow-500' :
-                              window.utilization > 50 ? 'bg-green-500' : 'bg-blue-500'
-                            }`}
-                            style={{ width: `${Math.min(window.utilization, 100)}%` }}
-                          />
-                        </div>
-                        
-                        <div className="flex justify-between text-xs text-gray-600">
-                          <span>Charge: {window.totalWorkload}j / {window.capacity}j</span>
-                          <span>{window.utilization > 100 ? 'Surcharge!' : window.utilization < 50 ? 'Sous-utilisé' : 'Optimal'}</span>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Recommendations */}
-              {planningAlgorithm.recommendations.length > 0 && (
-                <div className="bg-white rounded-xl shadow-sm border p-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-purple-600" />
-                    Recommandations Algorithmiques
-                  </h3>
-                  
-                  <div className="space-y-3">
-                    {planningAlgorithm.recommendations.map((rec, index) => (
-                      <div 
-                        key={index}
-                        className={`p-4 rounded-lg border-l-4 ${
-                          rec.type === 'error' ? 'bg-red-50 border-red-500' :
-                          rec.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-                          'bg-blue-50 border-blue-500'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h4 className="font-medium text-gray-900">{rec.title}</h4>
-                            <p className="text-sm text-gray-600 mt-1">{rec.description}</p>
-                            <p className="text-xs text-gray-500 mt-2 italic">Action: {rec.action}</p>
+                  {/* Enhanced Window Analysis */}
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-6">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg">
+                        <BarChart3 className="h-6 w-6 text-white" />
+                      </div>
+                      Analyse des Fenêtres
+                    </h3>
+                    
+                    <div className="space-y-6">
+                      {planningAlgorithm.windowAnalysis.map((window) => (
+                        <div key={window.id} className="p-5 border border-gray-200/50 rounded-xl bg-gradient-to-r from-white to-gray-50/50 hover:shadow-md transition-all duration-300">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="font-bold text-gray-900 text-lg">{window.type.toUpperCase()}</h4>
+                              <p className="text-sm text-gray-500">{window.assignedAnomalies.length} anomalies</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-lg font-bold text-gray-900">{window.utilization.toFixed(1)}%</div>
+                              <div className="text-xs text-gray-500">Score: {window.overallScore.toFixed(1)}</div>
+                            </div>
+                          </div>
+                          
+                          <div className="w-full bg-gray-200 rounded-full h-3 mb-3 shadow-inner">
+                            <div 
+                              className={`h-3 rounded-full transition-all duration-500 ${
+                                window.utilization > 100 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+                                window.utilization > 85 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+                                window.utilization > 50 ? 'bg-gradient-to-r from-green-500 to-emerald-500' : 'bg-gradient-to-r from-blue-500 to-blue-600'
+                              }`}
+                              style={{ width: `${Math.min(window.utilization, 100)}%` }}
+                            />
+                          </div>
+                          
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span className="font-medium">Charge: {window.totalWorkload}j / {window.capacity}j</span>
+                            <span className={`font-semibold ${
+                              window.utilization > 100 ? 'text-red-600' : 
+                              window.utilization < 50 ? 'text-blue-600' : 'text-green-600'
+                            }`}>
+                              {window.utilization > 100 ? 'Surcharge!' : window.utilization < 50 ? 'Sous-utilisé' : 'Optimal'}
+                            </span>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Enhanced Recommendations */}
+                {planningAlgorithm.recommendations.length > 0 && (
+                  <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-6">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                      <div className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg">
+                        <TrendingUp className="h-6 w-6 text-white" />
+                      </div>
+                      Recommandations Algorithmiques
+                    </h3>
+                    
+                    <div className="space-y-4">
+                      {planningAlgorithm.recommendations.map((rec, index) => (
+                        <div 
+                          key={index}
+                          className={`p-5 rounded-xl border-l-4 transition-all duration-300 hover:shadow-md ${
+                            rec.type === 'error' ? 'bg-gradient-to-r from-red-50 to-red-50/50 border-red-500' :
+                            rec.type === 'warning' ? 'bg-gradient-to-r from-yellow-50 to-orange-50/50 border-yellow-500' :
+                            'bg-gradient-to-r from-blue-50 to-indigo-50/50 border-blue-500'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-2">
+                              <h4 className="font-bold text-gray-900 text-lg">{rec.title}</h4>
+                              <p className="text-sm text-gray-600 leading-relaxed">{rec.description}</p>
+                              <p className="text-xs text-gray-500 italic font-medium">Action recommandée: {rec.action}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Auto Scheduler Component */}
+      {/* Enhanced Auto Scheduler Component */}
       {autoScheduleEnabled && (
-        <AutoScheduler
-          treatedAnomalies={unscheduledTreatedAnomalies}
-          onScheduleComplete={handleAutoSchedule}
-          enabled={autoScheduleEnabled}
-        />
+        <div className="px-6 mt-8">
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 overflow-hidden">
+            <AutoScheduler
+              treatedAnomalies={unscheduledTreatedAnomalies}
+              onScheduleComplete={handleAutoSchedule}
+              enabled={autoScheduleEnabled}
+            />
+          </div>
+        </div>
       )}
 
-      {/* Create Window Modal */}
+      {/* Enhanced Create Window Modal */}
       <CreateWindowModal
         isOpen={showCreateModal}
         onClose={() => {
@@ -660,8 +702,8 @@ export const PlanningNew: React.FC = () => {
         availableAnomalies={unscheduledTreatedAnomalies}
       />
 
-      {/* Window Detail Modal */}
-      {selectedWindow && (
+      {/* Enhanced Window Detail Modal with Error Handling */}
+      {selectedWindow && showDetailModal && (
         <WindowDetailModal
           isOpen={showDetailModal}
           onClose={() => {
