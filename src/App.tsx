@@ -1,0 +1,41 @@
+// import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './contexts/AuthContext';
+import { DataProvider } from './contexts/DataContext';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { Layout } from './components/layout/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { Anomalies } from './pages/Anomalies';
+import { AnomalyDetail } from './pages/AnomalyDetail';
+import { Planning } from './pages/Planning';
+import { Import } from './pages/Import';
+import { Chat } from './pages/Chat';
+import { Profile } from './pages/Profile';
+
+function App() {
+  return (
+    <AuthProvider>
+      <DataProvider>
+        <Router>
+          <ProtectedRoute>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/anomalies" element={<Anomalies />} />
+                <Route path="/anomaly/:id" element={<AnomalyDetail />} />
+                <Route path="/planning" element={<Planning />} />
+                <Route path="/import" element={<Import />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/profile" element={<Profile />} />
+              </Routes>
+            </Layout>
+          </ProtectedRoute>
+          <Toaster position="top-right" />
+        </Router>
+      </DataProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;
