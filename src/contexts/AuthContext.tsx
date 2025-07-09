@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authService, User as BackendUser } from '../services/authService';
+import { supabase } from '../lib/supabase';
+import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { ValidationError } from '../services/apiService';
 import { WelcomePage } from '../components/welcome/WelcomePage';
 import toast from 'react-hot-toast';
@@ -39,21 +40,22 @@ export const useAuth = () => {
   return context;
 };
 
-// Transform backend user to frontend format
-const transformBackendUser = (backendUser: BackendUser): User => {
+// Transform Supabase user to frontend format
+const transformSupabaseUser = (supabaseUser: SupabaseUser | null): User | null => {
+  if (!supabaseUser) return null;
   return {
-    id: backendUser.id,
-    email: backendUser.email,
-    name: backendUser.full_name,
-    role: backendUser.role,
-    department: backendUser.department,
-    phone: backendUser.phone,
-    lastLogin: backendUser.last_login ? new Date(backendUser.last_login) : undefined,
-    // Keep backend fields for compatibility
-    username: backendUser.username,
-    full_name: backendUser.full_name,
-    created_at: backendUser.created_at,
-    last_login: backendUser.last_login,
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    name: supabaseUser.user_metadata?.full_name || '',
+    role: supabaseUser.user_metadata?.role || '',
+    department: supabaseUser.user_metadata?.department || '',
+    phone: supabaseUser.user_metadata?.phone || '',
+    lastLogin: supabaseUser.last_sign_in_at ? new Date(supabaseUser.last_sign_in_at) : undefined,
+    username: supabaseUser.user_metadata?.username,
+    full_name: supabaseUser.user_metadata?.full_name,
+    created_at: supabaseUser.created_at,
+    last_login: supabaseUser.last_sign_in_at,
+    avatar: supabaseUser.user_metadata?.avatar_url,
   };
 };
 
@@ -62,112 +64,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing session
-    const initializeAuth = async () => {
-      const token = authService.getToken();
-      const savedUser = authService.getStoredUser();
-      
-      if (token && savedUser) {
-        try {
-          // Verify token is still valid by fetching profile
-          const backendUser = await authService.getProfile();
-          setUser(transformBackendUser(backendUser));
-        } catch (error) {
-          // Token is invalid, clear auth data
-          authService.logout();
-          setUser(null);
-        }
-      }
-      
+    const session = supabase.auth.getSession().then(({ data }) => {
+      setUser(transformSupabaseUser(data.session?.user ?? null));
       setIsLoading(false);
+    });
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(transformSupabaseUser(session?.user ?? null));
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
     };
-    
-    initializeAuth();
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    
     try {
-      // Try backend authentication first
-      const response = await authService.login(email, password);
-      const transformedUser = transformBackendUser(response.user);
-      setUser(transformedUser);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data.user) {
+        toast.error('Données de connexion invalides');
+        setIsLoading(false);
+        return false;
+      }
+      setUser(transformSupabaseUser(data.user));
       setIsLoading(false);
       return true;
     } catch (error) {
-      // Fallback to mock authentication for demo
-      if (email === 'admin@taqa.ma' && password === 'admin123') {
-        const mockUser: User = {
-          id: 'admin-001',
-          email: 'admin@taqa.ma',
-          name: 'Ahmed Bennani',
-          role: 'Administrateur Système',
-          department: 'Direction Technique',
-          phone: '+212 6 12 34 56 78',
-          avatar: 'https://images.pexels.com/photos/2379004/pexels-photo-2379004.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=2',
-          lastLogin: new Date(),
-        };
-        
-        setUser(mockUser);
-        localStorage.setItem('taqa_user', JSON.stringify(mockUser));
-        localStorage.setItem('taqa_token', 'mock-token');
-        setIsLoading(false);
-        return true;
-      }
-      
+      toast.error('Erreur de connexion.');
       setIsLoading(false);
-      
-      if (error instanceof ValidationError) {
-        toast.error('Données de connexion invalides');
-      } else {
-        toast.error('Erreur de connexion. Utilisation du mode démo.');
-        console.error('Login error:', error);
-      }
-      
       return false;
     }
   };
 
-  const logout = () => {
-    authService.logout();
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
   const updateProfile = async (data: Partial<User>): Promise<boolean> => {
     if (!user) return false;
-    
     setIsLoading(true);
-    
     try {
-      // Try backend update first
-      const backendUpdates = {
-        full_name: data.name,
-        email: data.email,
-        department: data.department,
-        phone: data.phone,
-      };
-      
-      const updatedBackendUser = await authService.updateProfile(backendUpdates);
-      const transformedUser = transformBackendUser(updatedBackendUser);
-      setUser(transformedUser);
+      const updates: { data: any } = { data: {} };
+      if (data.name) updates.data.full_name = data.name;
+      if (data.email) updates.data.email = data.email;
+      if (data.department) updates.data.department = data.department;
+      if (data.phone) updates.data.phone = data.phone;
+      if (data.avatar) updates.data.avatar_url = data.avatar;
+      const { data: updatedUser, error } = await supabase.auth.updateUser(updates);
+      if (error || !updatedUser?.user) {
+        toast.error('Données invalides');
+        setIsLoading(false);
+        return false;
+      }
+      setUser(transformSupabaseUser(updatedUser.user));
       setIsLoading(false);
       return true;
     } catch (error) {
-      // Fallback to local update for demo
-      const updatedUser = { ...user, ...data };
-      setUser(updatedUser);
-      localStorage.setItem('taqa_user', JSON.stringify(updatedUser));
+      toast.error('Erreur lors de la mise à jour du profil.');
       setIsLoading(false);
-      
-      if (error instanceof ValidationError) {
-        toast.error('Données invalides');
-        return false;
-      } else {
-        toast.warning('Mode démo - modifications locales uniquement');
-        console.error('Profile update error:', error);
-        return true;
-      }
+      return false;
     }
   };
 
