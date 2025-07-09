@@ -207,7 +207,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <button
                     onClick={() => handleSort('equipmentId')}
                     className="flex items-center space-x-1 hover:text-gray-700"
@@ -217,7 +217,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                       sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />
                     )}
                   </button>
-                </th>
+                </th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Description
                 </th>
@@ -249,14 +249,14 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
             <tbody className="bg-white divide-y divide-gray-200">
               {sortedAnomalies.map((anomaly) => (
                 <tr key={anomaly.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  {/* <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className={`w-2 h-2 rounded-full mr-3 ${getCriticalityColor(anomaly.criticalityLevel)}`} />
                       <div className="text-sm font-medium text-gray-900">
                         {anomaly.equipmentId || 'N/A'}
                       </div>
                     </div>
-                  </td>
+                  </td> */}
                   <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
                     <div className="truncate" title={anomaly.description || 'N/A'}>
                       {anomaly.description || 'N/A'}
