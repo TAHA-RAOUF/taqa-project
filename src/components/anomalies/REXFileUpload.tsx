@@ -7,13 +7,21 @@ import { supabase } from '../../lib/supabase';
 interface REXFileUploadProps {
   anomalyId: string;
   isEnabled: boolean;
+  onFileUploaded?: () => void;
+  onFileStatusChange?: (hasFile: boolean) => void;
 }
 
-export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabled }) => {
+export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabled, onFileUploaded, onFileStatusChange }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [currentFile, setCurrentFile] = useState<{ name: string; url: string } | null>(null);
+  const [currentFile, setCurrentFile] = useState<{ name: string; url: string; id: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Function to refresh the file list
+  const refreshFiles = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   // Load existing REX file on component mount
   React.useEffect(() => {
@@ -21,31 +29,38 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
       if (anomalyId) {
         setIsLoading(true);
         try {
-          // Query the rex_files table to check if this anomaly has a file
+          // Query the rex_files table using metadata to find files for this anomaly
           const { data, error } = await supabase
             .from('rex_files')
-            .select('filename, file_path')
-            .eq('anomaly_id', anomalyId)
-            .single();
+            .select('id, filename, filepath')
+            .contains('metadata', { anomaly_id: anomalyId })
+            .maybeSingle();
 
           if (error && error.code !== 'PGRST116') {
             console.error('Error checking for REX file:', error);
           }
 
           if (data) {
-            // Get the download URL for the file
-            const { data: urlData, error: urlError } = await supabase
+            // Get the public URL for the file - simpler approach
+            const { data: { publicUrl } } = supabase
               .storage
               .from('rex_files')
-              .createSignedUrl(data.file_path, 3600); // 1 hour link validity
+              .getPublicUrl(data.filepath);
 
-            if (urlError) {
-              console.error('Error getting file URL:', urlError);
-            } else if (urlData) {
-              setCurrentFile({
-                name: data.filename,
-                url: urlData.signedUrl
-              });
+            setCurrentFile({
+              id: data.id,
+              name: data.filename,
+              url: publicUrl
+            });
+            
+            // Notify parent that a file exists
+            if (onFileStatusChange) {
+              onFileStatusChange(true);
+            }
+          } else {
+            // No file found, notify parent
+            if (onFileStatusChange) {
+              onFileStatusChange(false);
             }
           }
         } catch (err) {
@@ -57,7 +72,7 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
     }
 
     loadExistingFile();
-  }, [anomalyId]);
+  }, [anomalyId, refreshKey]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -84,38 +99,56 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
         throw new Error(`Erreur lors de l'upload: ${uploadError.message}`);
       }
 
-      // 2. Add record to rex_files table
+      // 2. Add record to rex_files table with anomaly_id in metadata
+      const fileRecord = {
+        filename: selectedFile.name,
+        filepath: filePath,
+        file_size_bytes: selectedFile.size,
+        mime_type: selectedFile.type,
+        metadata: { anomaly_id: anomalyId },
+        description: `REX file for anomaly ${anomalyId}`
+      };
+      
+      console.log('Inserting file record:', fileRecord);
+      
       const { error: dbError } = await supabase
         .from('rex_files')
-        .insert([{
-          anomaly_id: anomalyId,
-          filename: selectedFile.name,
-          file_path: filePath,
-          file_size: selectedFile.size,
-          mime_type: selectedFile.type
-        }]);
+        .insert([fileRecord]);
 
       if (dbError) {
+        console.error('Database error:', dbError);
         throw new Error(`Erreur lors de l'enregistrement des données: ${dbError.message}`);
       }
 
-      // 3. Get download URL
-      const { data: urlData, error: urlError } = await supabase
+      console.log('File record inserted successfully');
+
+      // 3. Get the public URL for the uploaded file - simpler approach
+      const { data: { publicUrl } } = supabase
         .storage
         .from('rex_files')
-        .createSignedUrl(filePath, 3600); // 1 hour link validity
+        .getPublicUrl(filePath);
 
-      if (urlError) {
-        console.error('Error getting file URL:', urlError);
-      } else if (urlData) {
-        setCurrentFile({
-          name: selectedFile.name,
-          url: urlData.signedUrl
-        });
-      }
+      setCurrentFile({
+        id: '', // We'll get the actual ID on next refresh
+        name: selectedFile.name,
+        url: publicUrl
+      });
 
       toast.success('Fichier REX uploadé avec succès');
       setSelectedFile(null);
+      
+      // Refresh the file list to show the newly uploaded file
+      refreshFiles();
+      
+      // Notify parent that a file now exists
+      if (onFileStatusChange) {
+        onFileStatusChange(true);
+      }
+      
+      // Notify parent component that a file was uploaded
+      if (onFileUploaded) {
+        onFileUploaded();
+      }
     } catch (error) {
       console.error('Error uploading REX file:', error);
       toast.error('Erreur lors de l\'upload du fichier');
@@ -130,22 +163,26 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
     }
 
     try {
-      // 1. Get the file path
+      // 1. Get the file path using metadata to find the file for this anomaly
       const { data, error: fetchError } = await supabase
         .from('rex_files')
-        .select('file_path')
-        .eq('anomaly_id', anomalyId)
-        .single();
+        .select('filepath')
+        .contains('metadata', { anomaly_id: anomalyId })
+        .maybeSingle();
 
       if (fetchError) {
         throw new Error(`Erreur lors de la récupération du fichier: ${fetchError.message}`);
+      }
+
+      if (!data) {
+        throw new Error('Aucun fichier trouvé pour cette anomalie');
       }
 
       // 2. Delete from storage
       const { error: storageError } = await supabase
         .storage
         .from('rex_files')
-        .remove([data.file_path]);
+        .remove([data.filepath]);
 
       if (storageError) {
         throw new Error(`Erreur lors de la suppression du fichier: ${storageError.message}`);
@@ -155,7 +192,7 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
       const { error: dbError } = await supabase
         .from('rex_files')
         .delete()
-        .eq('anomaly_id', anomalyId);
+        .contains('metadata', { anomaly_id: anomalyId });
 
       if (dbError) {
         throw new Error(`Erreur lors de la suppression des données: ${dbError.message}`);
@@ -163,6 +200,19 @@ export const REXFileUpload: React.FC<REXFileUploadProps> = ({ anomalyId, isEnabl
 
       setCurrentFile(null);
       toast.success('Fichier REX supprimé avec succès');
+      
+      // Refresh the file list
+      refreshFiles();
+      
+      // Notify parent that no file exists anymore
+      if (onFileStatusChange) {
+        onFileStatusChange(false);
+      }
+      
+      // Notify parent component
+      if (onFileUploaded) {
+        onFileUploaded();
+      }
     } catch (error) {
       console.error('Error deleting REX file:', error);
       toast.error('Erreur lors de la suppression du fichier');

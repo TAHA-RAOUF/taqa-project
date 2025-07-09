@@ -3,12 +3,11 @@ import { vectorSearchService, SearchResult } from './vectorSearchService';
 
 // Initialize OpenAI client with OpenRouter configuration
 const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_LLM_API_KEY,
-  baseURL: import.meta.env.VITE_LLM_API_URL,
-  dangerouslyAllowBrowser: true // Required for client-side usage
+  apiKey: import.meta.env.VITE_LLM_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
 });
 
-const MODEL = import.meta.env.VITE_LLM_MODEL || 'qwen/qwen3-32b:free';
+const MODEL = 'gpt-4'; // Use GPT-4 model for better performance
 
 export class LLMService {
   async getChatCompletion(message: string, context?: any): Promise<string> {
@@ -59,7 +58,15 @@ Instructions :
 - Fournissez des réponses précises et actionables
 - Si vous n'avez pas assez d'informations, demandez des clarifications
 - Référencez les données contextuelles quand disponibles
-- Basez-vous prioritairement sur les informations similaires trouvées dans la base de données`;
+- Basez-vous prioritairement sur les informations similaires trouvées dans la base de données
+- repondre dans un paragraphe unique et concis, sans répétitions inutiles
+- Ne pas inclure de balises HTML ou de formatage complexe
+- Ne pas inclure de balises de code ou de formatage Markdown
+- Ne pas inclure de balises de citation ou de références externes
+- Ne pas inclure de balises de liste ou de points
+- Ne pas inclure de balises de titre ou de sous-titre
+- Ne pas inclure de balises de paragraphe ou de saut de ligne
+- Ne pas inclure de balises de lien ou d'URL`;
 
     // Add vector search context
     if (vectorContext) {

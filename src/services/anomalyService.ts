@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Anomaly } from '../types';
+import { vectorSearchService } from './vectorSearchService';
 
 // Supabase anomaly interface that matches the actual schema
 export interface SupabaseAnomaly {
@@ -276,7 +277,19 @@ export class AnomalyService {
         throw error;
       }
 
-      return data ? this.convertToFrontendAnomaly(data) : null;
+      const createdAnomaly = data ? this.convertToFrontendAnomaly(data) : null;
+      
+      // Index the new anomaly for vector search
+      if (createdAnomaly) {
+        try {
+          await vectorSearchService.indexAnomaly(createdAnomaly);
+        } catch (indexError) {
+          console.error('Error indexing new anomaly for vector search:', indexError);
+          // Don't fail the creation if indexing fails
+        }
+      }
+
+      return createdAnomaly;
     } catch (error) {
       console.error('Error in createAnomaly:', error);
       throw error;
@@ -350,7 +363,17 @@ export class AnomalyService {
       }
 
       // Convert the first item from array to frontend anomaly
-      return this.convertToFrontendAnomaly(data[0]);
+      const updatedAnomaly = this.convertToFrontendAnomaly(data[0]);
+      
+      // Re-index the updated anomaly for vector search
+      try {
+        await vectorSearchService.indexAnomaly(updatedAnomaly);
+      } catch (indexError) {
+        console.error('Error re-indexing updated anomaly for vector search:', indexError);
+        // Don't fail the update if indexing fails
+      }
+      
+      return updatedAnomaly;
     } catch (error) {
       console.error('Error in updateAnomaly:', error);
       throw error;

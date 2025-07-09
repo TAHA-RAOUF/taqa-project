@@ -33,6 +33,8 @@ export const AnomalyDetail: React.FC = () => {
   const [showActionPlan, setShowActionPlan] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(undefined);
+  const [rexFileRefresh, setRexFileRefresh] = useState(0);
+  const [hasRexFile, setHasRexFile] = useState(false);
 
   // Load action plan when component mounts
   useEffect(() => {
@@ -169,6 +171,24 @@ export const AnomalyDetail: React.FC = () => {
     window.location.reload();
   };
 
+  const handleCloseAnomaly = async () => {
+    if (!anomaly) return;
+    
+    if (!window.confirm('Êtes-vous sûr de vouloir clôturer cette anomalie? Cette action est irréversible.')) {
+      return;
+    }
+    
+    try {
+      await updateAnomaly(anomaly.id, { status: 'closed' });
+      toast.success('Anomalie clôturée avec succès');
+      // Redirect back to anomalies list after closing
+      setTimeout(() => navigate('/anomalies'), 1500);
+    } catch (error) {
+      console.error('Error closing anomaly:', error);
+      toast.error('Erreur lors de la clôture de l\'anomalie');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -291,10 +311,40 @@ export const AnomalyDetail: React.FC = () => {
           {/* REX File Upload - Only visible when anomaly is treated */}
           <div className="mb-6">
             <REXFileUpload 
+              key={`rex-${anomaly.id}-${rexFileRefresh}`}
               anomalyId={anomaly.id}
               isEnabled={anomaly.status === 'treated'} 
+              onFileUploaded={() => setRexFileRefresh(prev => prev + 1)}
+              onFileStatusChange={setHasRexFile}
             />
           </div>
+
+          {/* Close Anomaly Button - Only visible when anomaly is treated and has REX file */}
+          {anomaly.status === 'treated' && hasRexFile && (
+            <div className="mb-6">
+              <Card className="border-green-200 bg-green-50">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-green-800 mb-2">
+                        Prêt pour la clôture
+                      </h3>
+                      <p className="text-sm text-green-700">
+                        L'anomalie est traitée et le fichier REX a été ajouté. Vous pouvez maintenant clôturer cette anomalie.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleCloseAnomaly}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      <Clock className="h-4 w-4 mr-2" />
+                      Clôturer l'anomalie
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* AI Predictions */}
           <PredictionApproval 
