@@ -155,12 +155,12 @@ export const ChatInterface: React.FC = () => {
     const context: any = {};
 
     try {
-      // Get specific data based on message content
+      // Get basic data based on message content (fallback for non-vector search)
       if (lowerMessage.includes('anomalie') || lowerMessage.includes('critique') || lowerMessage.includes('équipement')) {
         const { data: anomalies, error } = await supabase
           .from('anomalies')
           .select('*')
-          .limit(5);
+          .limit(3);
           
         if (!error && anomalies) {
           context.anomalies = anomalies;
@@ -171,26 +171,31 @@ export const ChatInterface: React.FC = () => {
         const { data: maintenanceWindows, error } = await supabase
           .from('maintenance_windows')
           .select('*')
-          .limit(5);
+          .limit(3);
           
         if (!error && maintenanceWindows) {
           context.maintenanceWindows = maintenanceWindows;
         }
       }
 
-      if (lowerMessage.includes('recherche') || lowerMessage.includes('trouve')) {
-        const searchTerm = extractSearchTerm(message);
-        if (searchTerm) {
-          const { data: searchResults, error } = await supabase
-            .from('anomalies')
-            .select('*')
-            .or(`description.ilike.%${searchTerm}%,num_equipement.ilike.%${searchTerm}%`)
-            .limit(5);
-            
-          if (!error && searchResults) {
-            context.searchResults = searchResults;
-          }
-        }
+      // Calculate basic statistics
+      const { data: anomalies, error: anomaliesError } = await supabase
+        .from('anomalies')
+        .select('status, final_criticality_level')
+        .limit(1000);
+        
+      if (!anomaliesError && anomalies) {
+        const openAnomalies = anomalies.filter(a => a.status !== 'cloture').length;
+        const criticalAnomalies = anomalies.filter(a => a.final_criticality_level >= 10).length;
+        const totalAnomalies = anomalies.length;
+        const treatmentRate = totalAnomalies > 0 ? Math.round(((totalAnomalies - openAnomalies) / totalAnomalies) * 100) : 0;
+        
+        context.statistics = {
+          openAnomalies,
+          criticalAnomalies,
+          treatmentRate,
+          averageResolutionTime: 5
+        };
       }
 
     } catch (error) {
@@ -198,23 +203,6 @@ export const ChatInterface: React.FC = () => {
     }
 
     return context;
-  };
-
-  const extractSearchTerm = (message: string): string | null => {
-    const searchPatterns = [
-      /recherche\s+(.+)/i,
-      /trouve\s+(.+)/i,
-      /cherche\s+(.+)/i,
-      /information\s+sur\s+(.+)/i
-    ];
-
-    for (const pattern of searchPatterns) {
-      const match = message.match(pattern);
-      if (match) {
-        return match[1].trim();
-      }
-    }
-    return null;
   };
   
   return (

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { vectorSearchService, SearchResult } from './vectorSearchService';
 
 // Initialize OpenAI client with OpenRouter configuration
 const openai = new OpenAI({
@@ -12,7 +13,10 @@ const MODEL = import.meta.env.VITE_LLM_MODEL || 'qwen/qwen3-32b:free';
 export class LLMService {
   async getChatCompletion(message: string, context?: any): Promise<string> {
     try {
-      const systemPrompt = this.buildSystemPrompt(context);
+      // Get vector-based context
+      const vectorContext = await vectorSearchService.getContextForQuery(message);
+      
+      const systemPrompt = this.buildSystemPrompt(context, vectorContext);
       
       const completion = await openai.chat.completions.create({
         model: MODEL,
@@ -37,7 +41,11 @@ export class LLMService {
     }
   }
 
-  private buildSystemPrompt(context?: any): string {
+  private buildSystemPrompt(context?: any, vectorContext?: {
+    anomalies: SearchResult[];
+    maintenance: SearchResult[];
+    knowledge: SearchResult[];
+  }): string {
     let systemPrompt = `Vous êtes un assistant IA spécialisé dans la gestion des anomalies industrielles pour le système TAMS (Maintenance et Anomalies).
 
 Votre rôle :
@@ -50,13 +58,39 @@ Instructions :
 - Utilisez un ton professionnel mais accessible
 - Fournissez des réponses précises et actionables
 - Si vous n'avez pas assez d'informations, demandez des clarifications
-- Référencez les données contextuelles quand disponibles`;
+- Référencez les données contextuelles quand disponibles
+- Basez-vous prioritairement sur les informations similaires trouvées dans la base de données`;
 
+    // Add vector search context
+    if (vectorContext) {
+      if (vectorContext.anomalies.length > 0) {
+        systemPrompt += '\n\nAnomalies similaires trouvées:\n';
+        vectorContext.anomalies.forEach((result, index) => {
+          const anomaly = result.metadata;
+          systemPrompt += `${index + 1}. ${anomaly.num_equipement}: ${anomaly.description} (Similarité: ${(result.similarity * 100).toFixed(1)}%, Status: ${anomaly.status}, Criticité: ${anomaly.final_criticality_level || 'N/A'})\n`;
+        });
+      }
+
+      if (vectorContext.maintenance.length > 0) {
+        systemPrompt += '\n\nMaintenance similaire trouvée:\n';
+        vectorContext.maintenance.forEach((result, index) => {
+          const maintenance = result.metadata;
+          systemPrompt += `${index + 1}. ${maintenance.name}: ${new Date(maintenance.start_time).toLocaleDateString('fr-FR')} (Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
+        });
+      }
+
+      if (vectorContext.knowledge.length > 0) {
+        systemPrompt += '\n\nDocumentation pertinente:\n';
+        vectorContext.knowledge.forEach((result, index) => {
+          systemPrompt += `${index + 1}. ${result.metadata.title}: ${result.content.substring(0, 200)}... (Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
+        });
+      }
+    }
+
+    // Add traditional context if available
     if (context) {
-      systemPrompt += '\n\nDonnées contextuelles disponibles:\n';
-      
       if (context.statistics) {
-        systemPrompt += `\nStatistiques actuelles:
+        systemPrompt += `\n\nStatistiques actuelles:
 - Anomalies ouvertes: ${context.statistics.openAnomalies || 0}
 - Anomalies critiques: ${context.statistics.criticalAnomalies || 0}
 - Taux de traitement: ${context.statistics.treatmentRate || 0}%
@@ -64,23 +98,9 @@ Instructions :
       }
 
       if (context.anomalies && context.anomalies.length > 0) {
-        systemPrompt += '\n\nAnomalies récentes:';
+        systemPrompt += '\n\nAnomalies récentes additionnelles:';
         context.anomalies.forEach((anomaly: any, index: number) => {
           systemPrompt += `\n${index + 1}. ${anomaly.num_equipement}: ${anomaly.description} (Status: ${anomaly.status}, Criticité: ${anomaly.final_criticality_level || 'N/A'})`;
-        });
-      }
-
-      if (context.maintenanceWindows && context.maintenanceWindows.length > 0) {
-        systemPrompt += '\n\nFenêtres de maintenance planifiées:';
-        context.maintenanceWindows.forEach((window: any, index: number) => {
-          systemPrompt += `\n${index + 1}. ${window.name}: ${new Date(window.start_time).toLocaleDateString('fr-FR')} - ${new Date(window.end_time).toLocaleDateString('fr-FR')}`;
-        });
-      }
-
-      if (context.searchResults && context.searchResults.length > 0) {
-        systemPrompt += '\n\nRésultats de recherche:';
-        context.searchResults.forEach((result: any, index: number) => {
-          systemPrompt += `\n${index + 1}. ${result.num_equipement}: ${result.description}`;
         });
       }
     }
