@@ -303,17 +303,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ));
   };
 
-  // Action Plan functions (simplified - stored within anomaly)
+  // Action Plan functions with better error handling
   const addActionPlan = async (data: CreateActionPlanData) => {
     try {
+      // First check if anomaly exists
+      const anomalyExists = anomalies.some(anomaly => anomaly.id === data.anomalyId);
+      if (!anomalyExists) {
+        console.error('Cannot create action plan: Anomaly does not exist:', data.anomalyId);
+        toast.error('Erreur: L\'anomalie spécifiée n\'existe pas');
+        return;
+      }
+      
+      // Check if action plan already exists
+      const existingPlan = await supabaseActionPlanService.getActionPlan(data.anomalyId);
+      if (existingPlan) {
+        console.log('Action plan already exists, updating instead');
+        await updateActionPlan(existingPlan.id, {
+          needsOutage: data.needsOutage,
+          outageType: data.outageType,
+          outageDuration: data.outageDuration,
+          plannedDate: data.plannedDate,
+          estimatedCost: data.estimatedCost,
+          priority: data.priority,
+          comments: data.comments
+        });
+        return;
+      }
+      
+      // Create new action plan
       const newPlan = await supabaseActionPlanService.createActionPlan(data);
       if (newPlan) {
         setActionPlans(prev => [...prev, newPlan]);
         
-        // Update anomaly to indicate it has an action plan
-        await updateAnomaly(data.anomalyId, {
-          hasActionPlan: true
-        });
+        try {
+          // Update anomaly to indicate it has an action plan
+          await updateAnomaly(data.anomalyId, {
+            hasActionPlan: true
+          });
+        } catch (anomalyUpdateError) {
+          console.error('Failed to update anomaly after creating action plan:', anomalyUpdateError);
+          // Continue anyway as the action plan was created successfully
+        }
         
         toast.success('Plan d\'action créé avec succès');
       } else {
@@ -321,7 +351,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Failed to create action plan:', error);
-      toast.error('Erreur lors de la création du plan d\'action');
+      toast.error('Erreur lors de la création du plan d\'action: ' + (error instanceof Error ? error.message : String(error)));
     }
   };
 

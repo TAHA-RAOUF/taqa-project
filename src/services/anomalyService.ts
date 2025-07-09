@@ -322,19 +322,35 @@ export class AnomalyService {
         }
       }
 
+      // First verify the anomaly exists to prevent PGRST116 errors
+      const { data: checkData, error: checkError } = await supabase
+        .from('anomalies')
+        .select('id')
+        .eq('id', id);
+        
+      if (checkError || !checkData || checkData.length === 0) {
+        console.error('Error: Anomaly with ID does not exist:', id);
+        return null;
+      }
+      
       const { data, error } = await supabase
         .from('anomalies')
         .update(supabaseUpdates)
         .eq('id', id)
-        .select()
-        .single();
-
+        .select('*');
+        
       if (error) {
         console.error('Error updating anomaly:', error);
         throw error;
       }
+      
+      if (!data || data.length === 0) {
+        console.error('No anomaly data returned after update');
+        return null;
+      }
 
-      return data ? this.convertToFrontendAnomaly(data) : null;
+      // Convert the first item from array to frontend anomaly
+      return this.convertToFrontendAnomaly(data[0]);
     } catch (error) {
       console.error('Error in updateAnomaly:', error);
       throw error;

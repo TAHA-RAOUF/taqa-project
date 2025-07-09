@@ -188,7 +188,7 @@ export class SupabaseActionPlanService {
         return null;
       }
 
-      // Create the action items
+      // Create the action items - explicitly set field names to avoid ambiguous column issue
       const actionItems = data.actions.map((action, index) => ({
         action_plan_id: planData.id,
         action: action.action,
@@ -205,10 +205,11 @@ export class SupabaseActionPlanService {
         order_index: index
       }));
 
+      // Add explicit fields to avoid ambiguous column issues, including all required fields for SupabaseActionItem
       const { data: itemsData, error: itemsError } = await supabase
         .from('action_items')
         .insert(actionItems)
-        .select();
+        .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, progression, order_index, created_at, updated_at');
 
       if (itemsError) {
         console.error('Error creating action items:', itemsError);
