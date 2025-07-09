@@ -91,6 +91,27 @@ export function determineCriticalityLevel(
 }
 
 /**
+ * Calculates criticality level based on sum of all three scores
+ * @param fiabiliteIntegriteScore - Combined F&I score (0-5)
+ * @param disponibiliteScore - Availability score (0-5)
+ * @param processSafetyScore - Process safety score (0-5)
+ * @returns Criticality level
+ */
+export function calculateCriticalityLevelFromSum(
+  fiabiliteIntegriteScore: number,
+  disponibiliteScore: number,
+  processSafetyScore: number
+): 'low' | 'medium' | 'high' | 'critical' {
+  // Calculate sum of 3 scores out of 5 each (total range 3-15)
+  const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
+  
+  if (totalScore >= 12) return 'critical';  // 12-15: Critical
+  if (totalScore >= 8) return 'high';       // 8-12: High  
+  if (totalScore >= 4) return 'medium';     // 4-8: Medium
+  return 'low';                             // 0-4: Low
+}
+
+/**
  * Formats a score for display
  * @param score - Score to format
  * @param maxScore - Maximum possible score (default: 5)

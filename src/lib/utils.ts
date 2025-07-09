@@ -51,14 +51,13 @@ export function calculateCriticality(
   disponibilite: number,
   processSafety: number
 ): 'low' | 'medium' | 'high' | 'critical' {
-  // Merge fiabilite and integrite, then calculate average of 3 scores out of 5
-  const fiabiliteIntegrite = fiabilite_integrite;
-  const average = (fiabiliteIntegrite + disponibilite + processSafety);
+  // Calculate sum of 3 scores out of 5 each (total range 3-15)
+  const totalScore = fiabilite_integrite + disponibilite + processSafety;
   
-  if (average >= 13) return 'critical';
-  if (average >= 8) return 'high';
-  if (average >= 4) return 'medium';
-  return 'low';
+  if (totalScore >= 12) return 'critical';  // 12-15: Critical
+  if (totalScore >= 8) return 'high';       // 8-12: High  
+  if (totalScore >= 4) return 'medium';     // 4-8: Medium
+  return 'low';                             // 0-4: Low
 }
 
 export function optimizeMaintenanceSchedule(

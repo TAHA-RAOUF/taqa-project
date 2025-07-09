@@ -8,7 +8,10 @@ import {
   Edit, 
   Trash2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Info,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -16,7 +19,7 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Badge } from '../ui/Badge';
 import { Anomaly } from '../../types';
-import { formatDate, getCriticalityColor } from '../../lib/utils';
+import { formatDate } from '../../lib/utils';
 import toast from 'react-hot-toast';
 
 interface AnomalyTableProps {
@@ -36,6 +39,8 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   const [criticalityFilter, setCriticalityFilter] = useState('all');
   const [sortField, setSortField] = useState<keyof Anomaly>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   const statusOptions = [
     { value: 'all', label: 'Tous les statuts' },
@@ -60,6 +65,20 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     { value: 'critical', label: 'Critique' },
   ];
   
+  // Calculate criticality level based on sum of scores
+  const calculateCriticalityLevel = (anomaly: Anomaly): 'low' | 'medium' | 'high' | 'critical' => {
+    const fiabiliteIntegriteScore = anomaly.userFiabiliteIntegriteScore ?? anomaly.fiabiliteIntegriteScore ?? 0;
+    const disponibiliteScore = anomaly.userDisponibiliteScore ?? anomaly.disponibiliteScore ?? 0;
+    const processSafetyScore = anomaly.userProcessSafetyScore ?? anomaly.processSafetyScore ?? 0;
+    
+    const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
+    
+    if (totalScore >= 12) return 'critical';
+    if (totalScore >= 8) return 'high';
+    if (totalScore >= 4) return 'medium';
+    return 'low';
+  };
+
   const getBadgeVariant = (level: string) => {
     switch (level) {
       case 'critical': return 'danger';
@@ -86,7 +105,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                          (anomaly.responsiblePerson || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || anomaly.status === statusFilter;
     const matchesService = serviceFilter === 'all' || anomaly.service === serviceFilter;
-    const matchesCriticality = criticalityFilter === 'all' || anomaly.criticalityLevel === criticalityFilter;
+    const matchesCriticality = criticalityFilter === 'all' || calculateCriticalityLevel(anomaly) === criticalityFilter;
     
     return matchesSearch && matchesStatus && matchesService && matchesCriticality;
   });
@@ -104,6 +123,24 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
     return 0;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(sortedAnomalies.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedAnomalies = sortedAnomalies.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, serviceFilter, criticalityFilter]);
+
+  const itemsPerPageOptions = [
+    { value: '5', label: '5 par page' },
+    { value: '10', label: '10 par page' },
+    { value: '20', label: '20 par page' },
+    { value: '50', label: '50 par page' },
+  ];
   
   const handleSort = (field: keyof Anomaly) => {
     if (sortField === field) {
@@ -112,6 +149,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
       setSortField(field);
       setSortDirection('asc');
     }
+    setCurrentPage(1); // Reset to first page when sorting changes
   };
   
   const handleExport = () => {
@@ -142,7 +180,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           anomaly.service || '',
           `"${(anomaly.responsiblePerson || '').replace(/"/g, '""')}"`,
           anomaly.status || '',
-          anomaly.criticalityLevel || '',
+          calculateCriticalityLevel(anomaly),
           (anomaly.fiabiliteIntegriteScore || 0).toFixed(1),
           (anomaly.disponibiliteScore || 0).toFixed(1),
           (anomaly.processSafetyScore || 0).toFixed(1),
@@ -177,7 +215,12 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           <div className="flex flex-col">
             <CardTitle>Gestion des Anomalies</CardTitle>
             <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-              <span>{filteredAnomalies.length} anomalie{filteredAnomalies.length !== 1 ? 's' : ''} trouvée{filteredAnomalies.length !== 1 ? 's' : ''} sur {anomalies.length} au total</span>
+              <span>
+                {filteredAnomalies.length > 0 && (
+                  <>Affichage de {startIndex + 1}-{Math.min(endIndex, filteredAnomalies.length)} sur </>
+                )}
+                {filteredAnomalies.length} anomalie{filteredAnomalies.length !== 1 ? 's' : ''} trouvée{filteredAnomalies.length !== 1 ? 's' : ''} sur {anomalies.length} au total
+              </span>
               {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
                 <span className="text-blue-600 font-medium">
                   Filtres actifs
@@ -195,6 +238,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   setServiceFilter('all');
                   setCriticalityFilter('all');
                   setSearchTerm('');
+                  setCurrentPage(1);
                 }}
               >
                 Réinitialiser
@@ -270,7 +314,12 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   Service
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Criticité
+                  <div className="flex items-center space-x-1">
+                    <span>Criticité</span>
+                    <div title="Calculé à partir de la somme des scores: Faible (0-4), Moyenne (4-8), Élevée (8-12), Critique (12-15)">
+                      <Info className="w-3 h-3 text-gray-400 cursor-help" />
+                    </div>
+                  </div>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
@@ -292,7 +341,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {sortedAnomalies.map((anomaly) => (
+              {paginatedAnomalies.map((anomaly) => (
                 <tr key={anomaly.id} className="hover:bg-gray-50">
                   {/* <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -311,8 +360,8 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                     {anomaly.service || 'N/A'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge variant={getBadgeVariant(anomaly.criticalityLevel || 'low')}>
-                      {anomaly.criticalityLevel || 'low'}
+                    <Badge variant={getBadgeVariant(calculateCriticalityLevel(anomaly))}>
+                      {calculateCriticalityLevel(anomaly)}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -348,9 +397,80 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           </table>
         </div>
         
-        {sortedAnomalies.length === 0 && (
+        {paginatedAnomalies.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucune anomalie trouvée.</p>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {sortedAnomalies.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 pt-6 border-t border-gray-200">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-700">Afficher:</span>
+                <Select
+                  options={itemsPerPageOptions}
+                  value={itemsPerPage.toString()}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                />
+              </div>
+              <div className="text-sm text-gray-700">
+                Affichage de {startIndex + 1} à {Math.min(endIndex, sortedAnomalies.length)} sur {sortedAnomalies.length} résultats
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Précédent
+              </Button>
+
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNumber;
+                  if (totalPages <= 5) {
+                    pageNumber = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNumber = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNumber = totalPages - 4 + i;
+                  } else {
+                    pageNumber = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <Button
+                      key={pageNumber}
+                      variant={currentPage === pageNumber ? "primary" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNumber)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {pageNumber}
+                    </Button>
+                  );
+                })}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Suivant
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

@@ -39,12 +39,13 @@ export const calculateCriticalityLevel = (
   disponibiliteScore: number,
   processSafetyScore: number
 ): 'low' | 'medium' | 'high' | 'critical' => {
-  const averageScore = (fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore) / 3;
+  // Calculate sum of 3 scores out of 5 each (total range 3-15)
+  const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
   
-  if (averageScore >= 4.5) return 'critical';
-  if (averageScore >= 3.5) return 'high';
-  if (averageScore >= 2.5) return 'medium';
-  return 'low';
+  if (totalScore >= 12) return 'critical';  // 12-15: Critical
+  if (totalScore >= 8) return 'high';       // 8-12: High  
+  if (totalScore >= 4) return 'medium';     // 4-8: Medium
+  return 'low';                             // 0-4: Low
 };
 
 /**
