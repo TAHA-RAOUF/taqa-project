@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Settings, Zap } from 'lucide-react';
+import { Calendar, Settings, Zap, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { CalendarView } from '../components/planning/CalendarView';
 import { IntelligentPlanning } from '../components/planning/IntelligentPlanning';
 import { useData } from '../contexts/DataContext';
 import { useIntelligentPlanning } from '../hooks/useIntelligentPlanning';
 import { MaintenanceWindow } from '../types';
 import { planningIntegration } from '../lib/planningUtils';
+import PlanningEnhancer from '../lib/planningEnhancer';
 import toast from 'react-hot-toast';
 
 export const Planning: React.FC = () => {
@@ -32,10 +34,26 @@ export const Planning: React.FC = () => {
   }, [intelligentPlanning.schedulingInProgress]);
   
   const handleSchedule = (windowId: string, anomalyId: string) => {
+    // Find the anomaly and window
+    const anomaly = anomalies.find(a => a.id === anomalyId);
+    const window = maintenanceWindows.find(w => w.id === windowId);
+    
+    if (!anomaly || !window) {
+      toast.error('Anomalie ou fenêtre de maintenance introuvable');
+      return;
+    }
+    
+    // Update the anomaly with the maintenance window assignment
+    updateAnomaly(anomalyId, { maintenanceWindowId: windowId });
+    
+    toast.success(`Anomalie "${anomaly.title}" assignée à la fenêtre de maintenance`);
     console.log('Schedule anomaly:', anomalyId, 'to window:', windowId);
   };
   
   const handleCreateWindow = () => {
+    // Navigate to create window modal or open inline form
+    // For now, we'll set up a placeholder that shows a toast
+    toast('Fonctionnalité en cours de développement - Utilisez le bouton "Nouvel Arrêt" dans l\'interface');
     console.log('Create new maintenance window');
   };
 
@@ -67,13 +85,26 @@ export const Planning: React.FC = () => {
   };
 
   const handleOptimizeWithAI = () => {
-    const { suggestions } = planningIntegration.calculateOptimalScheduling(actionPlans, maintenanceWindows);
+    // Use the enhanced planning logic
+    const suggestions = PlanningEnhancer.generateOptimizationSuggestions(anomalies, maintenanceWindows, actionPlans);
+    const smartScheduleResults = PlanningEnhancer.smartSchedule(anomalies, maintenanceWindows, actionPlans);
     
     if (suggestions.length > 0) {
       toast.success(`${suggestions.length} suggestions d'optimisation trouvées`);
       console.log('AI Optimization suggestions:', suggestions);
+      
+      // Show scheduling results
+      PlanningEnhancer.showSchedulingResults(smartScheduleResults);
     } else {
       toast('Aucune optimisation possible pour le moment');
+    }
+    
+    // Validate current scheduling
+    const validation = PlanningEnhancer.validateScheduling(anomalies, maintenanceWindows);
+    if (!validation.isValid) {
+      validation.errors.forEach(error => {
+        toast.error(error);
+      });
     }
   };
 
@@ -88,6 +119,26 @@ export const Planning: React.FC = () => {
 
   const handleWindowCreate = (newWindow: MaintenanceWindow) => {
     addMaintenanceWindow(newWindow);
+  };
+
+  const handleCreateAutomaticWindow = () => {
+    // Find critical anomalies that need immediate attention
+    const criticalAnomalies = anomalies.filter(a => 
+      a.criticalityLevel === 'critical' && 
+      a.status === 'treated' && 
+      !a.maintenanceWindowId
+    );
+
+    if (criticalAnomalies.length > 0) {
+      const firstCritical = criticalAnomalies[0];
+      const actionPlan = actionPlans.find(ap => ap.anomalyId === firstCritical.id);
+      const autoWindow = PlanningEnhancer.createAutomaticWindow(firstCritical, actionPlan);
+      
+      addMaintenanceWindow(autoWindow);
+      toast.success(`Fenêtre automatique créée pour anomalie critique: ${firstCritical.title}`);
+    } else {
+      toast('Aucune anomalie critique en attente de programmation');
+    }
   };
   
   return (
@@ -119,6 +170,10 @@ export const Planning: React.FC = () => {
           <Button variant="outline" onClick={handleOptimizeWithAI}>
             <Settings className="h-4 w-4 mr-2" />
             Optimiser IA
+          </Button>
+          <Button variant="outline" onClick={handleCreateAutomaticWindow}>
+            <Zap className="h-4 w-4 mr-2" />
+            Arrêt Auto
           </Button>
           <div className="flex items-center space-x-2">
             <div className={`h-2 w-2 rounded-full ${

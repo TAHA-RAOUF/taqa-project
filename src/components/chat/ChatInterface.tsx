@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Send, Bot, User, MessageCircle, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Send, Bot, User, MessageCircle, TrendingUp, Loader2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { supabaseChatService } from '../../services/supabaseChatService';
+import { toast } from 'react-hot-toast';
 
 interface ChatMessage {
   id: string;
@@ -16,12 +18,33 @@ export const ChatInterface: React.FC = () => {
     {
       id: '1',
       type: 'bot',
-      content: 'Bonjour! Je suis votre assistant IA TAMS. Je peux vous aider avec l\'analyse des anomalies, les recommandations de maintenance, et bien plus. Comment puis-je vous assister aujourd\'hui?',
+      content: 'Bonjour! Je suis votre assistant IA TAMS connecté à votre base de données. Je peux vous aider avec l\'analyse des anomalies en temps réel, les recommandations de maintenance, et bien plus. Comment puis-je vous assister aujourd\'hui?',
       timestamp: new Date(),
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [statistics, setStatistics] = useState<any>(null);
+
+  // Load initial data and check connection
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      // Test connection and load statistics
+      const stats = await supabaseChatService.getStatisticsForAI();
+      setStatistics(stats);
+      setIsConnected(true);
+      toast.success('Connecté à la base de données TAMS');
+    } catch (error) {
+      console.error('Failed to connect to database:', error);
+      setIsConnected(false);
+      toast.error('Erreur de connexion à la base de données');
+    }
+  };
   
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
@@ -34,43 +57,100 @@ export const ChatInterface: React.FC = () => {
     };
     
     setMessages(prev => [...prev, userMessage]);
+    const currentMessage = inputMessage;
     setInputMessage('');
     setIsTyping(true);
     
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      // Get AI response from Supabase service
+      const context = await buildMessageContext(currentMessage);
+      const response = await supabaseChatService.getAIResponse(currentMessage, context);
+      
       const botResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: getBotResponse(inputMessage),
+        content: response,
         timestamp: new Date(),
       };
       
       setMessages(prev => [...prev, botResponse]);
+      
+      // Save conversation to database
+      await supabaseChatService.saveChatMessage(currentMessage, response, context);
+      
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      const errorResponse: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        type: 'bot',
+        content: 'Désolé, je rencontre une difficulté pour traiter votre demande. Veuillez réessayer.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+      toast.error('Erreur lors du traitement de votre message');
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
-  
-  const getBotResponse = (message: string): string => {
+
+  const buildMessageContext = async (message: string) => {
     const lowerMessage = message.toLowerCase();
-    
-    if (lowerMessage.includes('anomalie') && lowerMessage.includes('critique')) {
-      return 'Actuellement, vous avez 23 anomalies critiques en attente. La plus urgente concerne la canalisation C-402 avec un score de criticité de 9.1/10. Voulez-vous voir les détails?';
+    const context: any = {};
+
+    try {
+      // Always include current statistics
+      context.statistics = await supabaseChatService.getStatisticsForAI();
+
+      // Get specific data based on message content
+      if (lowerMessage.includes('anomalie') || lowerMessage.includes('critique') || lowerMessage.includes('équipement')) {
+        let filters: any = { limit: 5 };
+        
+        if (lowerMessage.includes('critique')) {
+          filters.criticality = 'critical';
+        }
+        
+        // Extract equipment ID if mentioned
+        const equipmentMatch = message.match(/[A-Z]-\d+/i);
+        if (equipmentMatch) {
+          filters.equipment = equipmentMatch[0].toUpperCase();
+        }
+
+        context.anomalies = await supabaseChatService.getAnomaliesForAI(filters);
+      }
+
+      if (lowerMessage.includes('maintenance') || lowerMessage.includes('planning') || lowerMessage.includes('arrêt')) {
+        context.maintenanceWindows = await supabaseChatService.getMaintenanceWindowsForAI();
+      }
+
+      if (lowerMessage.includes('recherche') || lowerMessage.includes('trouve')) {
+        const searchTerm = extractSearchTerm(message);
+        if (searchTerm) {
+          context.searchResults = await supabaseChatService.searchAnomalies(searchTerm);
+        }
+      }
+
+    } catch (error) {
+      console.error('Error building context:', error);
     }
-    
-    if (lowerMessage.includes('statistique') || lowerMessage.includes('rapport')) {
-      return 'Voici un aperçu des statistiques: 84.5% de taux de traitement, 4.2 jours de délai moyen de résolution, et 156 anomalies ouvertes. Souhaitez-vous un rapport détaillé?';
+
+    return context;
+  };
+
+  const extractSearchTerm = (message: string): string | null => {
+    const searchPatterns = [
+      /recherche\s+(.+)/i,
+      /trouve\s+(.+)/i,
+      /cherche\s+(.+)/i,
+      /information\s+sur\s+(.+)/i
+    ];
+
+    for (const pattern of searchPatterns) {
+      const match = message.match(pattern);
+      if (match) {
+        return match[1].trim();
+      }
     }
-    
-    if (lowerMessage.includes('maintenance') || lowerMessage.includes('planning')) {
-      return 'Le prochain arrêt mineur est prévu du 15 au 18 janvier. 12 anomalies sont déjà planifiées. Je peux optimiser le planning pour inclure d\'autres anomalies compatibles.';
-    }
-    
-    if (lowerMessage.includes('équipement') || lowerMessage.includes('p-101')) {
-      return 'L\'équipement P-101 a une anomalie active avec des vibrations excessives. Statut: En cours de traitement. Criticité: Élevée. Responsable: Ahmed Bennani.';
-    }
-    
-    return 'Je comprends votre question. Puis-je vous aider avec des informations sur les anomalies, les statistiques, la maintenance planifiée, ou des équipements spécifiques?';
+    return null;
   };
   
   return (
@@ -97,8 +177,10 @@ export const ChatInterface: React.FC = () => {
               <span>Conversation</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-500">En ligne</span>
+              <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <span className="text-sm text-gray-500">
+                {isConnected ? 'Connecté à Supabase' : 'Déconnecté'}
+              </span>
             </div>
           </CardTitle>
         </CardHeader>
@@ -241,25 +323,35 @@ export const ChatInterface: React.FC = () => {
             <CardTitle className="text-lg flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-green-500" />
               <span>Statistiques Live</span>
+              {!isConnected && <div className="w-2 h-2 bg-red-500 rounded-full"></div>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Anomalies ouvertes</span>
-              <span className="font-semibold text-orange-600">156</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Critiques</span>
-              <span className="font-semibold text-red-600">23</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Taux résolution</span>
-              <span className="font-semibold text-green-600">84.5%</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Temps moyen</span>
-              <span className="font-semibold text-blue-600">4.2j</span>
-            </div>
+            {statistics ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Anomalies ouvertes</span>
+                  <span className="font-semibold text-orange-600">{statistics.openAnomalies}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Critiques</span>
+                  <span className="font-semibold text-red-600">{statistics.criticalAnomalies}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Taux résolution</span>
+                  <span className="font-semibold text-green-600">{statistics.treatmentRate}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Temps moyen</span>
+                  <span className="font-semibold text-blue-600">{statistics.averageResolutionTime}j</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <span className="ml-2 text-sm text-gray-500">Chargement...</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

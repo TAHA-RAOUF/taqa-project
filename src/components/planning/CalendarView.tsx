@@ -63,11 +63,38 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
   const [selectedWindow, setSelectedWindow] = useState<MaintenanceWindow | null>(null);
   const [showWindowDetails, setShowWindowDetails] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showOptimizeResults, setShowOptimizeResults] = useState(false);
 
   const today = new Date();
   
+  const handleOptimizeAI = () => {
+    // Calculate optimal scheduling suggestions
+    const { suggestions } = planningIntegration.calculateOptimalScheduling(actionPlans, localWindows);
+    
+    if (suggestions.length > 0) {
+      setShowOptimizeResults(true);
+      toast.success(`${suggestions.length} suggestions d'optimisation trouvées`);
+    } else {
+      toast('Aucune optimisation possible pour le moment');
+    }
+  };
+
+  const handleToggleFilters = () => {
+    setShowFilters(!showFilters);
+  };
+
+  const handleFilterChange = (newFilter: string) => {
+    setFilterCriticality(newFilter);
+    toast.success(`Filtre appliqué: ${newFilter}`);
+  };
+
+  const filteredAnomalies = filterCriticality === 'all' 
+    ? anomalies 
+    : anomalies.filter(a => a.criticalityLevel === filterCriticality);
+  
   const getAnomaliesForDate = (date: Date) => {
-    return anomalies.filter(anomaly => {
+    return filteredAnomalies.filter(anomaly => {
       const anomalyDate = new Date(anomaly.createdAt);
       return anomalyDate.toDateString() === date.toDateString();
     });
@@ -279,11 +306,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleToggleFilters}>
             <Filter className="w-4 h-4 mr-2" />
             Filtres Avancés
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleOptimizeAI}>
             <Settings className="w-4 h-4 mr-2" />
             Optimiser IA
           </Button>
@@ -293,6 +320,91 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </Button>
         </div>
       </div>
+
+      {/* Filters Panel */}
+      {showFilters && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-4">
+              <h3 className="text-lg font-semibold">Filtres</h3>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Criticité:</span>
+                <Button
+                  variant={filterCriticality === 'all' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('all')}
+                >
+                  Tous
+                </Button>
+                <Button
+                  variant={filterCriticality === 'critical' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('critical')}
+                >
+                  Critique
+                </Button>
+                <Button
+                  variant={filterCriticality === 'high' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('high')}
+                >
+                  Élevée
+                </Button>
+                <Button
+                  variant={filterCriticality === 'medium' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('medium')}
+                >
+                  Moyenne
+                </Button>
+                <Button
+                  variant={filterCriticality === 'low' ? 'primary' : 'outline'}
+                  size="sm"
+                  onClick={() => handleFilterChange('low')}
+                >
+                  Faible
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Optimization Results */}
+      {showOptimizeResults && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Suggestions d'optimisation IA</h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowOptimizeResults(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {schedulingSuggestions.map((suggestion, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                  <div>
+                    <p className="font-medium">{suggestion.window?.type} - {suggestion.window?.description}</p>
+                    <p className="text-sm text-gray-600">
+                      Efficacité: {suggestion.efficiency}% | 
+                      Actions: {suggestion.actionPlans.length}
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => {
+                    toast.success('Suggestion appliquée');
+                    setShowOptimizeResults(false);
+                  }}>
+                    Appliquer
+                  </Button>
+                </div>
+              ))}
+              {schedulingSuggestions.length === 0 && (
+                <p className="text-gray-600">Aucune suggestion d'optimisation disponible pour le moment.</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Interactive Planning Interface */}
