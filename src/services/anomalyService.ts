@@ -37,6 +37,11 @@ export interface SupabaseAnomaly {
   maintenance_window_id?: string;
   import_batch_id?: string;
   system_id?: string;
+  
+  // Archive fields
+  archived_at?: string;
+  archived_by?: string;
+  archive_reason?: string;
 }
 
 export interface CreateAnomalyData {
@@ -73,6 +78,7 @@ export interface AnomalyFilters {
   search?: string;
   page?: number;
   per_page?: number;
+  archived?: boolean; // To filter for archived (status=cloture) or non-archived records
 }
 
 export class AnomalyService {
@@ -143,6 +149,11 @@ export class AnomalyService {
       estimatedHours: supabaseAnomaly.estimated_hours,
       priority: supabaseAnomaly.priority,
       maintenanceWindowId: supabaseAnomaly.maintenance_window_id,
+      
+      // Archive fields
+      archivedAt: supabaseAnomaly.archived_at ? new Date(supabaseAnomaly.archived_at) : undefined,
+      archivedBy: supabaseAnomaly.archived_by,
+      archiveReason: supabaseAnomaly.archive_reason,
     };
   }
 
@@ -154,7 +165,18 @@ export class AnomalyService {
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Apply filters
+      // Filter for archived or non-archived records
+      if (filters.archived !== undefined) {
+        if (filters.archived) {
+          // Get only archived records (status = cloture/closed)
+          query = query.eq('status', 'cloture');
+        } else {
+          // Get only non-archived records (status != cloture/closed)
+          query = query.neq('status', 'cloture');
+        }
+      }
+
+      // Apply other filters
       if (filters.status && filters.status !== 'all') {
         const supabaseStatus = this.mapStatusToSupabase(filters.status as any);
         query = query.eq('status', supabaseStatus);
@@ -447,6 +469,50 @@ export class AnomalyService {
       return true;
     } catch (error) {
       console.error('Error in bulkUpdateStatus:', error);
+      throw error;
+    }
+  }
+
+  // Archive an anomaly (set status to cloture/closed)
+  async archiveAnomaly(anomalyId: string, archivedBy: string = 'System', archiveReason: string = 'Manual archive'): Promise<boolean> {
+    try {
+      // First, get the anomaly to archive
+      const { data: anomaly, error: fetchError } = await supabase
+        .from('anomalies')
+        .select('*')
+        .eq('id', anomalyId)
+        .single();
+
+      if (fetchError || !anomaly) {
+        console.error('Error fetching anomaly for archive:', fetchError);
+        throw fetchError || new Error('Anomaly not found');
+      }
+
+      // Check if anomaly is in 'traite' status
+      if (anomaly.status !== 'traite') {
+        throw new Error('Anomaly must be in treated status to be archived');
+      }
+
+      // Update the anomaly status to 'cloture'
+      const { error } = await supabase
+        .from('anomalies')
+        .update({
+          status: 'cloture', // Set to closed/cloture when archived
+          updated_at: new Date().toISOString(),
+          archived_at: new Date().toISOString(),
+          archived_by: archivedBy,
+          archive_reason: archiveReason
+        })
+        .eq('id', anomalyId);
+        
+      if (error) {
+        console.error('Error archiving anomaly:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in archiveAnomaly:', error);
       throw error;
     }
   }

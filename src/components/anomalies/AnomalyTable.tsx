@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, 
-  Filter, 
   Download, 
   Eye, 
   Edit, 
-  Trash2,
+  Archive,
+  RotateCcw,
   ChevronUp,
   ChevronDown,
   Info,
@@ -26,12 +26,18 @@ interface AnomalyTableProps {
   anomalies: Anomaly[];
   onEdit?: (anomaly: Anomaly) => void;
   onDelete?: (anomaly: Anomaly) => void;
+  onArchive?: (anomaly: Anomaly) => void;
+  onRestore?: (anomaly: Anomaly) => void;
+  isArchive?: boolean;
 }
 
 export const AnomalyTable: React.FC<AnomalyTableProps> = ({ 
   anomalies, 
   onEdit, 
-  onDelete 
+  onDelete,
+  onArchive,
+  onRestore,
+  isArchive = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -375,15 +381,38 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                           <Eye className="w-4 h-4" />
                         </Button>
                       </Link>
-                      {onEdit && (
-                        <Button variant="ghost" size="sm" onClick={() => onEdit(anomaly)}>
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      )}
-                      {onDelete && (
-                        <Button variant="ghost" size="sm" onClick={() => onDelete(anomaly)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                      {isArchive ? (
+                        <>
+                          {onRestore && (
+                            <Button variant="ghost" size="sm" onClick={() => onRestore(anomaly)}>
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {onDelete && (
+                            <Button variant="ghost" size="sm" onClick={() => onDelete(anomaly)}>
+                              <Archive className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {onEdit && (
+                            <Button variant="ghost" size="sm" onClick={() => onEdit(anomaly)}>
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {onArchive && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => onArchive(anomaly)}
+                              disabled={anomaly.status !== 'treated'}
+                              title={anomaly.status !== 'treated' ? 'L\'anomalie doit être traitée avant d\'être archivée' : 'Archiver l\'anomalie'}
+                            >
+                              <Archive className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </td>

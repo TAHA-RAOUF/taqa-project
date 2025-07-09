@@ -9,7 +9,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Anomalies } from './pages/Anomalies';
 import { AnomalyDetail } from './pages/AnomalyDetail';
 import { Planning } from './pages/Planning';
-import { Import } from './pages/Import';
+import { Archive } from './pages/Archive';
 import { Chat } from './pages/Chat';
 import { Profile } from './pages/Profile';
 import LogsPage from './pages/Logs';
@@ -26,7 +26,7 @@ function App() {
                 <Route path="/anomalies" element={<Anomalies />} />
                 <Route path="/anomaly/:id" element={<AnomalyDetail />} />
                 <Route path="/planning" element={<Planning />} />
-                <Route path="/import" element={<Import />} />
+                <Route path="/archive" element={<Archive />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/logs" element={<LogsPage />} />

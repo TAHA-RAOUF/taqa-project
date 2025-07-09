@@ -33,6 +33,11 @@ export interface Anomaly {
   maintenanceWindowId?: string;
   actionPlan?: ActionPlan;
   hasActionPlan?: boolean;
+  
+  // Archive fields
+  archivedAt?: Date;
+  archivedBy?: string;
+  archiveReason?: string;
 }
 
 export interface MaintenanceWindow {

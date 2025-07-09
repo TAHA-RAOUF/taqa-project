@@ -3,24 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Wrench,
-  Save, 
-  X, 
   Paperclip, 
   MessageSquare, 
   Clock, 
   User, 
-  AlertTriangle,
-  CheckCircle,
-  Calendar,
-  TrendingUp,
-  Edit
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import { ActionPlanModal } from '../components/anomalies/ActionPlanModal';
+import { PredictionApproval } from '../components/anomalies/PredictionApproval';
 import { useData } from '../contexts/DataContext';
 import { formatDateTime, getCriticalityColor } from '../lib/utils';
 import { ActionPlan } from '../types';
@@ -38,26 +31,6 @@ export const AnomalyDetail: React.FC = () => {
   const [showActionPlan, setShowActionPlan] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(undefined);
-  const [editingScores, setEditingScores] = useState(false);
-  const [aiScores, setAiScores] = useState({
-    fiabiliteIntegriteScore: anomaly?.fiabiliteIntegriteScore || 0,
-    disponibiliteScore: anomaly?.disponibiliteScore || 0,
-    processSafetyScore: anomaly?.processSafetyScore || 0,
-    criticalityLevel: anomaly?.criticalityLevel || 'low'
-  });
-  const [userScores, setUserScores] = useState({
-    fiabiliteIntegriteScore: anomaly?.userFiabiliteIntegriteScore || anomaly?.fiabiliteIntegriteScore || 0,
-    disponibiliteScore: anomaly?.userDisponibiliteScore || anomaly?.disponibiliteScore || 0,
-    processSafetyScore: anomaly?.userProcessSafetyScore || anomaly?.processSafetyScore || 0,
-    criticalityLevel: anomaly?.userCriticalityLevel || anomaly?.criticalityLevel || 'low'
-  });
-  const [useUserScores, setUseUserScores] = useState(anomaly?.useUserScores || false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    status: anomaly?.status || 'new',
-    priority: anomaly?.priority || 1,
-    estimatedHours: anomaly?.estimatedHours || 0
-  });
 
   // Load action plan when component mounts
   useEffect(() => {
@@ -97,16 +70,6 @@ export const AnomalyDetail: React.FC = () => {
       </div>
     );
   }
-
-  const getBadgeVariant = (level: string) => {
-    switch (level) {
-      case 'critical': return 'danger';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
-    }
-  };
 
   const getStatusVariant = (status: string) => {
     switch (status) {
@@ -185,26 +148,11 @@ export const AnomalyDetail: React.FC = () => {
     setNewComment('');
   };
 
-  const handleScoreChange = (field: keyof typeof userScores, value: number) => {
-    const newScores = { ...userScores, [field]: value };
-    // Calculate new criticality based on the sum of the three scores
-    const totalScore = newScores.fiabiliteIntegriteScore + newScores.disponibiliteScore + newScores.processSafetyScore;
-    let newCriticality: 'low' | 'medium' | 'high' | 'critical' = 'low';
-    
-    if (totalScore <= 6) newCriticality = 'low';
-    else if (totalScore <= 9) newCriticality = 'medium';
-    else if (totalScore <= 12) newCriticality = 'high';
-    else newCriticality = 'critical';
-    
-    setUserScores({ ...newScores, criticalityLevel: newCriticality });
+  // Handle anomaly updates from PredictionApproval component
+  const handleAnomalyUpdate = () => {
+    // Simple reload for now - in a real app, this would update the context
+    window.location.reload();
   };
-
-  const handleSaveScores = () => {
-    setEditingScores(false);
-    toast.success('Scores de criticité mis à jour');
-  };
-
-  const currentScores = useUserScores ? userScores : aiScores;
 
   return (
     <div className="space-y-6">
@@ -391,185 +339,10 @@ export const AnomalyDetail: React.FC = () => {
           )}
 
           {/* AI Predictions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-5 w-5 text-blue-600" />
-                  <span>Analyse de Criticité</span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setUseUserScores(!useUserScores)}
-                  >
-                    {useUserScores ? 'Voir IA' : 'Voir Utilisateur'}
-                  </Button>
-                  {!editingScores ? (
-                    <Button variant="outline" size="sm" onClick={() => setEditingScores(true)}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Modifier
-                    </Button>
-                  ) : (
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingScores(false)}>
-                        <X className="w-4 h-4" />
-                      </Button>
-                      <Button size="sm" onClick={handleSaveScores}>
-                        <Save className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-4 flex items-center space-x-4">
-                <Badge variant={useUserScores ? 'info' : 'default'}>
-                  {useUserScores ? 'Scores Utilisateur' : 'Prédictions IA'}
-                </Badge>
-                {useUserScores && (
-                  <span className="text-sm text-gray-500">
-                    Dernière modification: {new Date().toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg relative">
-                  <p className="text-sm text-blue-600 mb-1">Fiabilité & Intégrité</p>
-                  {editingScores && useUserScores ? (
-                    <input
-                      type="number"
-                      min="0"
-                      max="5"
-                      step="0.1"
-                      value={userScores.fiabiliteIntegriteScore.toFixed(1)}
-                      onChange={(e) => {
-                        const value = parseFloat(e.target.value);
-                        handleScoreChange('fiabiliteIntegriteScore', value);
-                      }}
-                      className="w-full text-center text-2xl font-bold text-blue-900 bg-transparent border-b-2 border-blue-300 focus:outline-none focus:border-blue-500"
-                    />
-                  ) : (
-                    <p className="text-2xl font-bold text-blue-900">{currentScores.fiabiliteIntegriteScore.toFixed(1)}</p>
-                  )}
-                  <div className="text-xs text-blue-600 mt-1">/5</div>
-                </div>
-                <div className="text-center p-4 bg-orange-50 rounded-lg relative">
-                  <p className="text-sm text-orange-600 mb-1">Disponibilité</p>
-                  {editingScores && useUserScores ? (
-                    <input
-                      type="number"
-                      min="0"
-                      max="5"
-                      step="0.1"
-                      value={userScores.disponibiliteScore}
-                      onChange={(e) => handleScoreChange('disponibiliteScore', parseFloat(e.target.value))}
-                      className="w-full text-center text-2xl font-bold text-orange-900 bg-transparent border-b-2 border-orange-300 focus:outline-none focus:border-orange-500"
-                    />
-                  ) : (
-                    <p className="text-2xl font-bold text-orange-900">{currentScores.disponibiliteScore}</p>
-                  )}
-                  <div className="text-xs text-orange-600 mt-1">/5</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg relative">
-                  <p className="text-sm text-purple-600 mb-1">Sécurité</p>
-                  {editingScores && useUserScores ? (
-                    <input
-                      type="number"
-                      min="0"
-                      max="5"
-                      step="0.1"
-                      value={userScores.processSafetyScore}
-                      onChange={(e) => handleScoreChange('processSafetyScore', parseFloat(e.target.value))}
-                      className="w-full text-center text-2xl font-bold text-purple-900 bg-transparent border-b-2 border-purple-300 focus:outline-none focus:border-purple-500"
-                    />
-                  ) : (
-                    <p className="text-2xl font-bold text-purple-900">{currentScores.processSafetyScore}</p>
-                  )}
-                  <div className="text-xs text-purple-600 mt-1">/5</div>
-                </div>
-              </div>
-              
-              <div className="mt-6 flex items-center justify-center space-x-4">
-                <Badge variant={getBadgeVariant(currentScores.criticalityLevel)} className="text-lg px-4 py-2">
-                  Criticité: {currentScores.criticalityLevel}
-                </Badge>
-                <div className="text-sm text-gray-500">
-                  {((currentScores.fiabiliteIntegriteScore + currentScores.disponibiliteScore + currentScores.processSafetyScore)).toFixed(1)}/15
-                </div>
-              </div>
-              
-              {useUserScores && (
-                <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                    <span className="text-sm text-yellow-800">
-                      Ces scores ont été modifiés manuellement et remplacent les prédictions IA.
-                    </span>
-                  </div>
-                </div>
-              )}
-              
-              {!useUserScores && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm text-blue-800">
-                      Scores générés automatiquement par l'intelligence artificielle.
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Score Comparison */}
-          {useUserScores && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Comparaison IA vs Utilisateur</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[
-                    { key: 'fiabiliteIntegrite', label: 'Fiabilité & Intégrité', color: 'blue' },
-                    { key: 'disponibiliteScore', label: 'Disponibilité', color: 'orange' },
-                    { key: 'processSafetyScore', label: 'Sécurité', color: 'purple' }
-                  ].map(({ key, label }) => {
-                    let aiValue, userValue;
-                    
-                    if (key === 'fiabiliteIntegrite') {
-                      aiValue = aiScores.fiabiliteIntegriteScore;
-                      userValue = userScores.fiabiliteIntegriteScore;
-                    } else {
-                      aiValue = aiScores[key as keyof typeof aiScores] as number;
-                      userValue = userScores[key as keyof typeof userScores] as number;
-                    }
-                    
-                    const diff = userValue - aiValue;
-                    
-                    return (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">{label}</span>
-                        <div className="flex items-center space-x-4">
-                          <div className="text-sm text-gray-500">IA: {aiValue.toFixed(1)}</div>
-                          <div className="text-sm font-medium">Utilisateur: {userValue.toFixed(1)}</div>
-                          <div className={`text-sm font-medium ${
-                            diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-500'
-                          }`}>
-                            {diff > 0 ? '+' : ''}{diff.toFixed(1)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <PredictionApproval 
+            anomaly={anomaly}
+            onUpdate={handleAnomalyUpdate}
+          />
 
           {/* Comments */}
           <Card>
@@ -638,46 +411,19 @@ export const AnomalyDetail: React.FC = () => {
             <CardContent className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-                {isEditing ? (
-                  <Select
-                    options={statusOptions}
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as 'new' | 'in_progress' | 'treated' | 'closed' })}
-                  />
-                ) : (
-                  <Badge variant={getStatusVariant(anomaly.status)}>
-                    {statusOptions.find(s => s.value === anomaly.status)?.label}
-                  </Badge>
-                )}
+                <Badge variant={getStatusVariant(anomaly.status)}>
+                  {statusOptions.find(s => s.value === anomaly.status)?.label}
+                </Badge>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Priorité</label>
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    min="1"
-                    max="5"
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                  />
-                ) : (
-                  <p className="text-gray-900">Priorité {anomaly.priority || 1}</p>
-                )}
+                <p className="text-gray-900">Priorité {anomaly.priority || 1}</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Heures estimées</label>
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    min="0"
-                    value={formData.estimatedHours}
-                    onChange={(e) => setFormData({ ...formData, estimatedHours: parseInt(e.target.value) })}
-                  />
-                ) : (
-                  <p className="text-gray-900">{anomaly.estimatedHours || 0}h</p>
-                )}
+                <p className="text-gray-900">{anomaly.estimatedHours || 0}h</p>
               </div>
             </CardContent>
           </Card>

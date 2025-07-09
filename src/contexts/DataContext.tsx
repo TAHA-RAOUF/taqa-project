@@ -13,6 +13,7 @@ interface DataContextType {
   addAnomaly: (anomaly: Omit<Anomaly, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateAnomaly: (id: string, updates: Partial<Anomaly>) => void;
   deleteAnomaly: (id: string) => void;
+  archiveAnomaly: (id: string, archivedBy?: string, archiveReason?: string) => Promise<boolean>;
   
   // Maintenance Windows
   maintenanceWindows: MaintenanceWindow[];
@@ -72,8 +73,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Initialize logging service
         await loggingService.initialize();
         
-        // Load anomalies directly from Supabase
-        const anomaliesResponse = await anomalyService.getAllAnomalies({ per_page: 1000 });
+        // Load non-archived anomalies directly from Supabase
+        const anomaliesResponse = await anomalyService.getAllAnomalies({ 
+          per_page: 1000,
+          archived: false // Only get non-archived records (status != cloture)
+        });
         
         setAnomalies(anomaliesResponse);
         setMaintenanceWindows(mockMaintenanceWindows); // Use mock data for now
@@ -238,6 +242,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.error('Erreur lors de la suppression de l\'anomalie');
     }
   };
+  
+  // Archive anomaly
+  const archiveAnomaly = async (id: string, archivedBy: string = 'User', archiveReason: string = 'Manual archive') => {
+    try {
+      // Check if anomaly is in 'treated' status
+      const anomaly = anomalies.find(a => a.id === id);
+      
+      if (!anomaly) {
+        toast.error('Anomalie introuvable');
+        return false;
+      }
+      
+      if (anomaly.status !== 'treated') {
+        toast.error('L\'anomalie doit être traitée avant d\'être archivée');
+        return false;
+      }
+      
+      const success = await anomalyService.archiveAnomaly(id, archivedBy, archiveReason);
+      
+      if (success) {
+        setAnomalies(prev => prev.filter(anomaly => anomaly.id !== id));
+        toast.success('Anomalie archivée avec succès');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Failed to archive anomaly:', error);
+      toast.error('Erreur lors de l\'archivage de l\'anomalie');
+      return false;
+    }
+  };
 
   // Maintenance Window functions
   const addMaintenanceWindow = async (windowData: Omit<MaintenanceWindow, 'id'>) => {
@@ -394,6 +430,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAnomaly,
     updateAnomaly,
     deleteAnomaly,
+    archiveAnomaly,
     
     // Maintenance Window functions
     addMaintenanceWindow,
