@@ -106,11 +106,11 @@ export class AnomalyService {
 
   // Calculate criticality level based on the sum of the three scores
   private calculateCriticalityLevel(totalScore: number): 'low' | 'medium' | 'high' | 'critical' {
-    // Total score ranges from 3 to 15
-    if (totalScore <= 6) return 'low';
-    if (totalScore <= 9) return 'medium';
-    if (totalScore <= 12) return 'high';
-    return 'critical';
+    // Total score ranges from 0 to 15
+    if (totalScore > 9) return 'critical';   // > 9: Anomalies critiques
+    if (totalScore >= 7) return 'high';     // 7-8: Anomalies à criticité élevée
+    if (totalScore >= 3) return 'medium';   // 3-6: Anomalies à criticité normale
+    return 'low';                           // 0-2: Anomalies à criticité faible
   }
 
   // Convert SupabaseAnomaly to frontend Anomaly format

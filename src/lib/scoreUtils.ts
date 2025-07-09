@@ -102,13 +102,13 @@ export function calculateCriticalityLevelFromSum(
   disponibiliteScore: number,
   processSafetyScore: number
 ): 'low' | 'medium' | 'high' | 'critical' {
-  // Calculate sum of 3 scores out of 5 each (total range 3-15)
+  // Calculate sum of 3 scores out of 5 each (total range 0-15)
   const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
   
-  if (totalScore >= 12) return 'critical';  // 12-15: Critical
-  if (totalScore >= 8) return 'high';       // 8-12: High  
-  if (totalScore >= 4) return 'medium';     // 4-8: Medium
-  return 'low';                             // 0-4: Low
+  if (totalScore > 9) return 'critical';     // > 9: Anomalies critiques
+  if (totalScore >= 7) return 'high';       // 7-8: Anomalies à criticité élevée  
+  if (totalScore >= 3) return 'medium';     // 3-6: Anomalies à criticité normale
+  return 'low';                             // 0-2: Anomalies à criticité faible
 }
 
 /**

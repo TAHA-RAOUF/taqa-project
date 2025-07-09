@@ -25,10 +25,10 @@ export const PredictionApproval: React.FC<PredictionApprovalProps> = ({ anomaly,
   const totalScore = editedScores.fiabiliteIntegriteScore + editedScores.disponibiliteScore + editedScores.processSafetyScore;
   
   const getCurrentCriticality = (total: number) => {
-    if (total >= 9) return 'critical';
-    if (total >= 7) return 'high';
-    if (total >= 4) return 'medium';
-    return 'low';
+    if (total > 9) return 'critical';   // > 9: Anomalies critiques
+    if (total >= 7) return 'high';     // 7-8: Anomalies à criticité élevée
+    if (total >= 3) return 'medium';   // 3-6: Anomalies à criticité normale
+    return 'low';                      // 0-2: Anomalies à criticité faible
   };
 
   const currentCriticality = getCurrentCriticality(totalScore);

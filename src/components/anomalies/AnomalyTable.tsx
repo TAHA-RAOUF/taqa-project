@@ -66,7 +66,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   const criticalityOptions = [
     { value: 'all', label: 'Toutes les criticités' },
     { value: 'low', label: 'Faible' },
-    { value: 'medium', label: 'Moyenne' },
+    { value: 'medium', label: 'Normale' },
     { value: 'high', label: 'Élevée' },
     { value: 'critical', label: 'Critique' },
   ];
@@ -79,10 +79,10 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     
     const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
     
-    if (totalScore >= 12) return 'critical';
-    if (totalScore >= 8) return 'high';
-    if (totalScore >= 4) return 'medium';
-    return 'low';
+    if (totalScore > 9) return 'critical';   // > 9: Anomalies critiques
+    if (totalScore >= 7) return 'high';     // 7-8: Anomalies à criticité élevée
+    if (totalScore >= 3) return 'medium';   // 3-6: Anomalies à criticité normale
+    return 'low';                           // 0-2: Anomalies à criticité faible
   };
 
   const getBadgeVariant = (level: string) => {
@@ -318,7 +318,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <div className="flex items-center space-x-1">
                     <span>Criticité</span>
-                    <div title="Calculé à partir de la somme des scores: Faible (0-4), Moyenne (4-8), Élevée (8-12), Critique (12-15)">
+                    <div title="Calculé à partir de la somme des scores: Faible (0-2), Normale (3-6), Élevée (7-8), Critique (>9)">
                       <Info className="w-3 h-3 text-gray-400 cursor-help" />
                     </div>
                   </div>

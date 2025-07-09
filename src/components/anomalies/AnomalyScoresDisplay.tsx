@@ -66,7 +66,7 @@ export const AnomalyScoresDisplay: React.FC<AnomalyScoresDisplayProps> = ({
     switch (level) {
       case 'critical': return 'CRITIQUE';
       case 'high': return 'ÉLEVÉ';
-      case 'medium': return 'MOYEN';
+      case 'medium': return 'NORMAL';
       case 'low': return 'FAIBLE';
       default: return 'INCONNU';
     }
@@ -150,7 +150,7 @@ export const AnomalyScoresDisplay: React.FC<AnomalyScoresDisplayProps> = ({
         <div className="text-xs text-gray-600 space-y-1">
           <p>• <strong>Fiabilité + Intégrité:</strong> Score combiné des deux métriques originales</p>
           <p>• <strong>Échelle:</strong> Tous les scores sont sur une échelle de 0 à 5</p>
-          <p>• <strong>Criticité:</strong> Calculée automatiquement basée sur la moyenne des trois scores</p>
+          <p>• <strong>Criticité:</strong> Calculée automatiquement basée sur la somme des trois scores</p>
         </div>
       </div>
     </div>

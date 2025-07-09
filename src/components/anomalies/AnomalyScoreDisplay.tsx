@@ -50,7 +50,7 @@ export const AnomalyScoreDisplay: React.FC<AnomalyScoreDisplayProps> = ({
     switch (level) {
       case 'critical': return 'Critique';
       case 'high': return 'Élevé';
-      case 'medium': return 'Moyen';
+      case 'medium': return 'Normal';
       case 'low': return 'Faible';
       default: return 'Inconnu';
     }

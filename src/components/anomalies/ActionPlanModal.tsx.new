@@ -45,8 +45,6 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 	);
 	const [isLoading, setIsLoading] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
-	const [locallyAddedActions, setLocallyAddedActions] = useState<string[]>([]);
-	const [locallyRemovedActions, setLocallyRemovedActions] = useState<string[]>([]);
 
 	const [newAction, setNewAction] = useState<Partial<ActionItem>>({
 		action: '',
@@ -56,7 +54,8 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 		ressourcesExternes: '',
 		statut: 'planifie',
 		dureeHeures: 0,
-		dureeJours: 0
+		dureeJours: 0,
+		progression: 0
 	});
 
 	const responsableOptions = [
@@ -109,9 +108,9 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 	const addAction = () => {
 		if (!newAction.action || !newAction.responsable) return;
 
-		const actionId = `action-${Date.now()}`;
+		// Create local action immediately for UI feedback
 		const action: ActionItem = {
-			id: actionId,
+			id: `action-${Date.now()}`, // Temporary ID that will be replaced with UUID from database
 			action: newAction.action || '',
 			responsable: newAction.responsable || '',
 			pdrsDisponible: newAction.pdrsDisponible || 'OUI',
@@ -119,48 +118,36 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 			ressourcesExternes: newAction.ressourcesExternes || '',
 			statut: newAction.statut || 'planifie',
 			dureeHeures: newAction.dureeHeures || 0,
-			dureeJours: newAction.dureeJours || 0
+			dureeJours: newAction.dureeJours || 0,
+			progression: newAction.progression || 0
 		};
 
+		// Immediately update local state for better UX
 		setActionPlan(prev => ({
 			...prev,
 			actions: [...prev.actions, action]
 		}));
-
-		// Track this as a locally added action
-		setLocallyAddedActions(prev => [...prev, actionId]);
-
+		
+		// Clear the form
 		setNewAction({
 			action: '',
 			responsable: '',
+			pdrsDisponible: 'OUI',
 			ressourcesInternes: '',
 			ressourcesExternes: '',
 			statut: 'planifie',
 			dureeHeures: 0,
 			dureeJours: 0,
+			progression: 0
 		});
 	};
 
 	const removeAction = (actionId: string) => {
-		// If this is a locally added action (not yet in DB), just remove it from the list
-		if (locallyAddedActions.includes(actionId)) {
-			setActionPlan(prev => ({
-				...prev,
-				actions: prev.actions.filter(a => a.id !== actionId)
-			}));
-			
-			// Remove from locally added actions tracking
-			setLocallyAddedActions(locallyAddedActions.filter(id => id !== actionId));
-		} else {
-			// This is an action that exists in the DB, mark it for removal
-			setLocallyRemovedActions([...locallyRemovedActions, actionId]);
-			
-			// Remove from UI
-			setActionPlan(prev => ({
-				...prev,
-				actions: prev.actions.filter(a => a.id !== actionId)
-			}));
-		}
+		// Remove locally for immediate UI update
+		setActionPlan(prev => ({
+			...prev,
+			actions: prev.actions.filter(a => a.id !== actionId)
+		}));
 	};
 
 	const updateAction = (actionId: string, field: keyof ActionItem, value: any) => {
@@ -168,7 +155,27 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 			...prev,
 			actions: prev.actions.map(action => {
 				if (action.id === actionId) {
-					return { ...action, [field]: value };
+					const updatedAction = { ...action, [field]: value };
+
+					// Auto-update progression based on status
+					if (field === 'statut') {
+						switch (value) {
+							case 'planifie':
+								updatedAction.progression = 0;
+								break;
+							case 'en_cours':
+								updatedAction.progression = 50;
+								break;
+							case 'termine':
+								updatedAction.progression = 100;
+								break;
+							case 'reporte':
+								updatedAction.progression = 0;
+								break;
+						}
+					}
+
+					return updatedAction;
 				}
 				return action;
 			}),
@@ -178,6 +185,7 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 
 	const handleSave = async () => {
 		setIsSaving(true);
+		
 		try {
 			// Update status based on completion
 			let status: ActionPlan['status'] = 'draft';
@@ -189,117 +197,164 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 				status = 'approved';
 			}
 
-			actionPlan.status = status;
-			actionPlan.updatedAt = new Date();
+			const finalActionPlan = {
+				...actionPlan,
+				status,
+				updatedAt: new Date()
+			};
 
-			let dbActionPlanId = actionPlan.id;
-			let isNewPlan = dbActionPlanId.startsWith('plan-');
-			let updatedPlan: ActionPlan | null = null;
-
-			// 1. First create or update the base action plan
-			if (isNewPlan) {
-				// Create a new action plan with all actions
-				updatedPlan = await supabaseActionPlanService.createActionPlan({
-					anomalyId: actionPlan.anomalyId,
-					needsOutage: actionPlan.needsOutage,
-					outageType: actionPlan.outageType as any,
-					outageDuration: actionPlan.outageDuration,
-					plannedDate: actionPlan.plannedDate,
-					estimatedCost: actionPlan.estimatedCost,
-					priority: actionPlan.priority,
-					comments: actionPlan.comments || '',
-					actions: actionPlan.actions.map(action => ({
-						action: action.action,
-						responsable: action.responsable,
-						pdrsDisponible: action.pdrsDisponible || '',
-						ressourcesInternes: action.ressourcesInternes || '',
-						ressourcesExternes: action.ressourcesExternes || '',
-						dureeHeures: action.dureeHeures,
-						dureeJours: action.dureeJours,
-						dateDebut: action.dateDebut,
-						dateFin: action.dateFin,
+			// If this is a new plan (not yet in database)
+			if (finalActionPlan.id.startsWith('plan-')) {
+				// Create a new action plan in the database
+				const createdPlan = await supabaseActionPlanService.createActionPlan({
+					anomalyId: anomaly.id,
+					needsOutage: finalActionPlan.needsOutage,
+					outageType: finalActionPlan.outageType,
+					outageDuration: finalActionPlan.outageDuration,
+					plannedDate: finalActionPlan.plannedDate,
+					estimatedCost: finalActionPlan.estimatedCost,
+					priority: finalActionPlan.priority,
+					comments: finalActionPlan.comments,
+					actions: finalActionPlan.actions.map(a => ({
+						action: a.action,
+						responsable: a.responsable,
+						pdrsDisponible: a.pdrsDisponible || 'OUI',
+						ressourcesInternes: a.ressourcesInternes || '',
+						ressourcesExternes: a.ressourcesExternes || '',
+						dureeHeures: a.dureeHeures,
+						dureeJours: a.dureeJours
 					}))
 				});
+				
+				if (createdPlan) {
+					// Pass the created plan back to the parent component
+					onSave(createdPlan);
+				} else {
+					throw new Error("Failed to save action plan");
+				}
 			} else {
-				// Update existing action plan
-				updatedPlan = await supabaseActionPlanService.updateActionPlan(
-					actionPlan.id,
+				// Plan already exists, update it
+				const updatedPlan = await supabaseActionPlanService.updateActionPlan(
+					finalActionPlan.id,
 					{
-						needsOutage: actionPlan.needsOutage,
-						outageType: actionPlan.outageType as any,
-						outageDuration: actionPlan.outageDuration,
-						plannedDate: actionPlan.plannedDate,
-						estimatedCost: actionPlan.estimatedCost,
-						priority: actionPlan.priority,
-						comments: actionPlan.comments,
+						needsOutage: finalActionPlan.needsOutage,
+						outageType: finalActionPlan.outageType,
+						outageDuration: finalActionPlan.outageDuration,
+						plannedDate: finalActionPlan.plannedDate,
+						estimatedCost: finalActionPlan.estimatedCost,
+						priority: finalActionPlan.priority,
+						comments: finalActionPlan.comments,
 						status: status
 					}
 				);
-			}
-
-			if (!updatedPlan) {
-				throw new Error("Failed to create/update action plan");
-			}
-
-			dbActionPlanId = updatedPlan.id;
-			
-			// 2. For existing plans, add any new actions to the database
-			if (!isNewPlan) {
-				for (const action of actionPlan.actions) {
-					// If this is a local action that hasn't been saved yet
-					if (action.id.startsWith('action-') && locallyAddedActions.includes(action.id)) {
-						await supabaseActionPlanService.addActionItem(dbActionPlanId, {
-							action: action.action,
-							responsable: action.responsable,
-							pdrsDisponible: action.pdrsDisponible || '',
-							ressourcesInternes: action.ressourcesInternes || '',
-							ressourcesExternes: action.ressourcesExternes || '',
-							statut: action.statut,
-							dureeHeures: action.dureeHeures,
-							dureeJours: action.dureeJours,
-							dateDebut: action.dateDebut,
-							dateFin: action.dateFin,
-						});
-					}
-				}
-			}
-			
-			// 3. Delete any actions that were removed
-			for (const actionId of locallyRemovedActions) {
-				if (!actionId.startsWith('action-')) {
-					await supabaseActionPlanService.deleteActionItem(dbActionPlanId, actionId);
-				}
-			}
-			
-			// 4. Get the final updated plan
-			const finalPlan = await supabaseActionPlanService.getActionPlan(anomaly.id);
-			if (finalPlan) {
-				onSave(finalPlan);
 				
-				// Reset tracking arrays
-				setLocallyAddedActions([]);
-				setLocallyRemovedActions([]);
-				
-				// Auto-update planning if outage is required
-				if (finalPlan.needsOutage && onUpdatePlanning) {
-					onUpdatePlanning(finalPlan);
+				// Create or update all action items for this plan
+				if (updatedPlan) {
+					// First, clean up any temporary action items
+					// Only keep real db actions that are not being added/updated in this session
+					const existingDbActions = updatedPlan.actions.filter(a => !a.id.startsWith('action-'));
+					const existingDbActionIds = existingDbActions.map(a => a.id);
 					
-					if (finalPlan.outageType === 'force') {
-						toast.success('Plan d\'action sauvegardé et arrêt d\'urgence créé automatiquement');
-					} else {
-						toast.success('Plan d\'action sauvegardé et intégré au planning');
+					// For each action in our current plan
+					for (const action of finalActionPlan.actions) {
+						// If it's a new action (temp ID), add it
+						if (action.id.startsWith('action-')) {
+							await supabaseActionPlanService.addActionItem(updatedPlan.id, {
+								action: action.action,
+								responsable: action.responsable,
+								pdrsDisponible: action.pdrsDisponible,
+								ressourcesInternes: action.ressourcesInternes || '',
+								ressourcesExternes: action.ressourcesExternes || '',
+								statut: action.statut,
+								dureeHeures: action.dureeHeures,
+								dureeJours: action.dureeJours,
+								dateDebut: action.dateDebut,
+								dateFin: action.dateFin
+							});
+						} 
+						// If it's an existing action, check if it was updated
+						else if (existingDbActionIds.includes(action.id)) {
+							const dbAction = existingDbActions.find(a => a.id === action.id);
+							const wasUpdated = 
+								dbAction?.action !== action.action ||
+								dbAction?.responsable !== action.responsable ||
+								dbAction?.pdrsDisponible !== action.pdrsDisponible ||
+								dbAction?.ressourcesInternes !== action.ressourcesInternes ||
+								dbAction?.ressourcesExternes !== action.ressourcesExternes ||
+								dbAction?.statut !== action.statut ||
+								dbAction?.dureeHeures !== action.dureeHeures ||
+								dbAction?.dureeJours !== action.dureeJours ||
+								dbAction?.dateDebut?.getTime() !== action.dateDebut?.getTime() ||
+								dbAction?.dateFin?.getTime() !== action.dateFin?.getTime() ||
+								dbAction?.progression !== action.progression;
+								
+							if (wasUpdated) {
+								// Update the action
+								await supabaseActionPlanService.updateActionItem(action.id, {
+									action: action.action,
+									responsable: action.responsable,
+									pdrsDisponible: action.pdrsDisponible,
+									ressourcesInternes: action.ressourcesInternes || '',
+									ressourcesExternes: action.ressourcesExternes || '',
+									statut: action.statut,
+									dureeHeures: action.dureeHeures,
+									dureeJours: action.dureeJours,
+									dateDebut: action.dateDebut,
+									dateFin: action.dateFin,
+									progression: action.progression
+								});
+							}
+						}
+					}
+					
+					// Check for deleted actions
+					const currentActionIds = finalActionPlan.actions.map(a => a.id);
+					for (const dbAction of existingDbActions) {
+						if (!currentActionIds.includes(dbAction.id)) {
+							// This action was deleted, remove it from the database
+							await supabaseActionPlanService.deleteActionItem(updatedPlan.id, dbAction.id);
+						}
+					}
+					
+					// Get the final updated plan
+					const finalUpdatedPlan = await supabaseActionPlanService.getActionPlan(anomaly.id);
+					if (finalUpdatedPlan) {
+						onSave(finalUpdatedPlan);
 					}
 				} else {
-					toast.success('Plan d\'action sauvegardé avec succès');
+					throw new Error("Failed to update action plan");
 				}
-				
-				onClose();
 			}
+
+			// Auto-update planning if outage is required
+			if (finalActionPlan.needsOutage && onUpdatePlanning) {
+				onUpdatePlanning(finalActionPlan);
+
+				if (finalActionPlan.outageType === 'force') {
+					toast.success('Plan d\'action sauvegardé et arrêt d\'urgence créé automatiquement');
+				} else {
+					toast.success('Plan d\'action sauvegardé et intégré au planning');
+				}
+			} else {
+				toast.success('Plan d\'action sauvegardé avec succès');
+			}
+
+			onClose();
 		} catch (error) {
 			console.error('Error saving action plan:', error);
 			toast.error('Erreur lors de la sauvegarde du plan d\'action');
 		} finally {
 			setIsSaving(false);
+		}
+	};
+
+	const getBadgeColor = (statut: string) => {
+		switch (statut) {
+			case 'planifie': return 'info';
+			case 'en_cours': return 'warning';
+			case 'termine': return 'success';
+			case 'reporte': return 'danger';
+			default: return 'default';
 		}
 	};
 
@@ -423,6 +478,12 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 																onChange={(e) => updateAction(action.id, 'action', e.target.value)}
 																className="w-full text-sm border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
 															/>
+															<div className="mt-1 w-full bg-gray-200 rounded-full h-1">
+																<div
+																	className="bg-blue-600 h-1 rounded-full transition-all duration-300"
+																	style={{ width: `${action.progression}%` }}
+																></div>
+															</div>
 														</div>
 													</td>
 													<td className="px-4 py-3">
@@ -555,7 +616,10 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 										/>
 									</div>
 									<div>
-										<Button onClick={addAction} disabled={!newAction.action || !newAction.responsable}>
+										<Button 
+											onClick={addAction} 
+											disabled={!newAction.action || !newAction.responsable}
+										>
 											<Plus className="w-4 h-4 mr-2" />
 											Ajouter
 										</Button>
@@ -568,7 +632,6 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 					{/* Résumé */}
 					<Card>
 						<CardContent className="p-6">
-
 							<h2 className="text-sm font-medium text-gray-900 mb-2">Résumé des Actions</h2>
 							{/* Actions Summary */}
 							<div className="mb-4">
@@ -642,14 +705,14 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 
 					{/* Actions */}
 					<div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-						<Button variant="outline" onClick={onClose}>
+						<Button variant="outline" onClick={onClose} disabled={isSaving}>
 							Annuler
 						</Button>
 						<Button onClick={handleSave} disabled={isSaving}>
 							{isSaving ? (
 								<>
 									<Loader className="w-4 h-4 mr-2 animate-spin" />
-									Sauvegarde en cours...
+									Sauvegarde...
 								</>
 							) : (
 								<>

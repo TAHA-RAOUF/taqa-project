@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Settings, Zap, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Settings, Zap, RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { CalendarView } from '../components/planning/CalendarView';
 import { IntelligentPlanning } from '../components/planning/IntelligentPlanning';
 import { TreatedAnomaliesStatus } from '../components/planning/TreatedAnomaliesStatus';
@@ -29,8 +28,6 @@ export const Planning: React.FC = () => {
 
   const intelligentPlanning = useIntelligentPlanning();
   const { 
-    logWindowCreated, 
-    logWindowUpdated, 
     logAutoScheduling, 
     logManualScheduling, 
     logError 

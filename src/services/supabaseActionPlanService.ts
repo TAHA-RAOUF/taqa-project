@@ -33,7 +33,6 @@ export interface SupabaseActionItem {
   duree_jours: number;
   date_debut?: string;
   date_fin?: string;
-  progression: number;
   order_index: number;
   created_at: string;
   updated_at: string;
@@ -84,6 +83,27 @@ export class SupabaseActionPlanService {
     return SupabaseActionPlanService.instance;
   }
 
+  // Helper method to get the anomaly ID for a plan ID
+  private async getAnomalyIdForPlan(planId: string): Promise<string | null> {
+    try {
+      const { data, error } = await supabase
+        .from('action_plans')
+        .select('anomaly_id')
+        .eq('id', planId)
+        .single();
+      
+      if (error || !data) {
+        console.error('Error getting anomaly ID for plan:', error);
+        return null;
+      }
+      
+      return data.anomaly_id;
+    } catch (error) {
+      console.error('Error in getAnomalyIdForPlan:', error);
+      return null;
+    }
+  }
+
   // Convert Supabase format to frontend format
   private mapSupabaseToFrontend(supabasePlan: SupabaseActionPlan, items: SupabaseActionItem[] = []): ActionPlan {
     return {
@@ -111,8 +131,7 @@ export class SupabaseActionPlanService {
         dureeHeures: item.duree_heures,
         dureeJours: item.duree_jours,
         dateDebut: item.date_debut ? new Date(item.date_debut) : undefined,
-        dateFin: item.date_fin ? new Date(item.date_fin) : undefined,
-        progression: item.progression
+        dateFin: item.date_fin ? new Date(item.date_fin) : undefined
       })),
       createdAt: new Date(supabasePlan.created_at),
       updatedAt: new Date(supabasePlan.updated_at)
@@ -121,10 +140,10 @@ export class SupabaseActionPlanService {
 
   async getActionPlan(anomalyId: string): Promise<ActionPlan | null> {
     try {
-      // Get the action plan with explicit Accept header to handle 406 issue
+      // Get the action plan with explicit column selection to avoid 406 and missing column issues
       const response = await supabase
         .from('action_plans')
-        .select('*')
+        .select('id, anomaly_id, needs_outage, outage_type, outage_duration, planned_date, estimated_cost, priority, comments, status, completion_percentage, total_duration_hours, total_duration_days, created_at, updated_at')
         .eq('anomaly_id', anomalyId)
         .single();
       
@@ -144,10 +163,10 @@ export class SupabaseActionPlanService {
         return null;
       }
 
-      // Get the action items
+      // Get the action items with explicit column selection
       const { data: itemsData, error: itemsError } = await supabase
         .from('action_items')
-        .select('*')
+        .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, order_index, created_at, updated_at')
         .eq('action_plan_id', planData.id)
         .order('order_index');
 
@@ -201,7 +220,6 @@ export class SupabaseActionPlanService {
         duree_jours: action.dureeJours,
         date_debut: action.dateDebut?.toISOString(),
         date_fin: action.dateFin?.toISOString(),
-        progression: 0,
         order_index: index
       }));
 
@@ -209,7 +227,7 @@ export class SupabaseActionPlanService {
       const { data: itemsData, error: itemsError } = await supabase
         .from('action_items')
         .insert(actionItems)
-        .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, progression, order_index, created_at, updated_at');
+        .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, order_index, created_at, updated_at');
 
       if (itemsError) {
         console.error('Error creating action items:', itemsError);
@@ -270,10 +288,10 @@ export class SupabaseActionPlanService {
         return null;
       }
 
-      // Get the action items
+      // Get the action items with explicit column selection
       const { data: itemsData, error: itemsError } = await supabase
         .from('action_items')
-        .select('*')
+        .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, order_index, created_at, updated_at')
         .eq('action_plan_id', planId)
         .order('order_index');
 
@@ -341,10 +359,10 @@ export class SupabaseActionPlanService {
 
   async getAllActionPlans(): Promise<ActionPlan[]> {
     try {
-      // Add explicit headers to avoid 406 error
+      // Get all action plans with explicit column selection to avoid 406 error
       const response = await supabase
         .from('action_plans')
-        .select('*')
+        .select('id, anomaly_id, needs_outage, outage_type, outage_duration, planned_date, estimated_cost, priority, comments, status, completion_percentage, total_duration_hours, total_duration_days, created_at, updated_at')
         .order('created_at', { ascending: false });
 
       if (response.error) {
@@ -364,7 +382,7 @@ export class SupabaseActionPlanService {
       for (const plan of plansData || []) {
         const { data: itemsData, error: itemsError } = await supabase
           .from('action_items')
-          .select('*')
+          .select('id, action_plan_id, action, responsable, pdrs_disponible, ressources_internes, ressources_externes, statut, duree_heures, duree_jours, date_debut, date_fin, order_index, created_at, updated_at')
           .eq('action_plan_id', plan.id)
           .order('order_index');
 
@@ -400,6 +418,170 @@ export class SupabaseActionPlanService {
       }
     } catch (error) {
       console.error('Error updating plan totals:', error);
+    }
+  }
+
+  async addActionItem(planId: string, item: {
+    action: string;
+    responsable: string;
+    pdrsDisponible?: string;
+    ressourcesInternes?: string;
+    ressourcesExternes?: string;
+    statut?: string;
+    dureeHeures: number;
+    dureeJours: number;
+    dateDebut?: Date;
+    dateFin?: Date;
+  }): Promise<ActionPlan | null> {
+    try {
+      // Get the current highest order index
+      const { data: existingItems } = await supabase
+        .from('action_items')
+        .select('order_index')
+        .eq('action_plan_id', planId)
+        .order('order_index', { ascending: false })
+        .limit(1);
+      
+      const nextOrderIndex = existingItems && existingItems.length > 0 
+        ? existingItems[0].order_index + 1 
+        : 0;
+      
+      // Create the action item with explicit fields to avoid ambiguous column issues
+      const { error: itemError } = await supabase
+        .from('action_items')
+        .insert([{
+          action_plan_id: planId,
+          action: item.action,
+          responsable: item.responsable,
+          pdrs_disponible: item.pdrsDisponible || '',
+          ressources_internes: item.ressourcesInternes || '',
+          ressources_externes: item.ressourcesExternes || '',
+          statut: item.statut || 'planifie',
+          duree_heures: item.dureeHeures,
+          duree_jours: item.dureeJours,
+          date_debut: item.dateDebut?.toISOString(),
+          date_fin: item.dateFin?.toISOString(),
+          order_index: nextOrderIndex
+        }])
+        .select();
+
+      if (itemError) {
+        console.error('Error adding action item:', itemError);
+        await loggingService.logError(itemError, 'addActionItem');
+        return null;
+      }
+
+      // Update plan totals
+      await this.updatePlanTotals(planId);
+      
+      // Get the updated plan with all items
+      const anomalyId = await this.getAnomalyIdForPlan(planId);
+      if (!anomalyId) {
+        console.error('Could not find anomaly ID for plan', planId);
+        return null;
+      }
+      return this.getActionPlan(anomalyId);
+    } catch (error) {
+      console.error('Error adding action item:', error);
+      await loggingService.logError(error as Error, 'addActionItem');
+      return null;
+    }
+  }
+
+  async deleteActionItem(planId: string, itemId: string): Promise<ActionPlan | null> {
+    try {
+      const { error } = await supabase
+        .from('action_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) {
+        console.error('Error deleting action item:', error);
+        await loggingService.logError(error, 'deleteActionItem');
+        return null;
+      }
+
+      // Update plan totals
+      await this.updatePlanTotals(planId);
+      
+      // Get the updated plan with all remaining items
+      const anomalyId = await this.getAnomalyIdForPlan(planId);
+      if (!anomalyId) {
+        console.error('Could not find anomaly ID for plan', planId);
+        return null;
+      }
+      return this.getActionPlan(anomalyId);
+    } catch (error) {
+      console.error('Error deleting action item:', error);
+      await loggingService.logError(error as Error, 'deleteActionItem');
+      return null;
+    }
+  }
+  
+  async updateActionItem(itemId: string, updates: {
+    action?: string;
+    responsable?: string;
+    pdrsDisponible?: string;
+    ressourcesInternes?: string;
+    ressourcesExternes?: string;
+    statut?: string;
+    dureeHeures?: number;
+    dureeJours?: number;
+    dateDebut?: Date;
+    dateFin?: Date;
+  }): Promise<ActionPlan | null> {
+    try {
+      // First get the plan ID for this item
+      const { data: item, error: fetchError } = await supabase
+        .from('action_items')
+        .select('action_plan_id')
+        .eq('id', itemId)
+        .single();
+        
+      if (fetchError || !item) {
+        console.error('Error fetching action item:', fetchError);
+        return null;
+      }
+      
+      const planId = item.action_plan_id;
+      
+      // Update the action item
+      const { error: updateError } = await supabase
+        .from('action_items')
+        .update({
+          action: updates.action,
+          responsable: updates.responsable,
+          pdrs_disponible: updates.pdrsDisponible,
+          ressources_internes: updates.ressourcesInternes,
+          ressources_externes: updates.ressourcesExternes,
+          statut: updates.statut,
+          duree_heures: updates.dureeHeures,
+          duree_jours: updates.dureeJours,
+          date_debut: updates.dateDebut?.toISOString(),
+          date_fin: updates.dateFin?.toISOString(),
+        })
+        .eq('id', itemId);
+
+      if (updateError) {
+        console.error('Error updating action item:', updateError);
+        await loggingService.logError(updateError, 'updateActionItem');
+        return null;
+      }
+
+      // Update plan totals
+      await this.updatePlanTotals(planId);
+      
+      // Get the updated plan
+      const anomalyId = await this.getAnomalyIdForPlan(planId);
+      if (!anomalyId) {
+        console.error('Could not find anomaly ID for plan', planId);
+        return null;
+      }
+      return this.getActionPlan(anomalyId);
+    } catch (error) {
+      console.error('Error updating action item:', error);
+      await loggingService.logError(error as Error, 'updateActionItem');
+      return null;
     }
   }
 }

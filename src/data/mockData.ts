@@ -16,7 +16,7 @@ export const mockAnomalies: Anomaly[] = [
     fiabiliteIntegriteScore: 4.0, // Combined (3.8 + 4.1)/2 = 3.95 ≈ 4.0/5
     disponibiliteScore: 3.4, // Already /5
     processSafetyScore: 4.0, // Already /5
-    criticalityLevel: 'high',
+    criticalityLevel: 'critical', // 4.0 + 3.4 + 4.0 = 11.4 (>9)
     estimatedHours: 16,
     priority: 1,
     maintenanceWindowId: 'mw-1',
@@ -37,8 +37,7 @@ export const mockAnomalies: Anomaly[] = [
           ressourcesExternes: '1 chaudronnier',
           statut: 'en_cours',
           dureeHeures: 8,
-          dureeJours: 1,
-          progression: 60
+          dureeJours: 1
         }
       ],
       totalDurationHours: 8,
@@ -66,7 +65,7 @@ export const mockAnomalies: Anomaly[] = [
     fiabiliteIntegriteScore: 3.1,
     disponibiliteScore: 2.8,
     processSafetyScore: 4.3,
-    criticalityLevel: 'high',
+    criticalityLevel: 'critical', // 3.1 + 2.8 + 4.3 = 10.2 (>9)
     estimatedHours: 8,
     priority: 2,
   },
@@ -84,7 +83,7 @@ export const mockAnomalies: Anomaly[] = [
     fiabiliteIntegriteScore: 2.9,
     disponibiliteScore: 3.6,
     processSafetyScore: 3.4,
-    criticalityLevel: 'medium',
+    criticalityLevel: 'critical', // 2.9 + 3.6 + 3.4 = 9.9 (>9)
     estimatedHours: 4,
     priority: 3,
   },

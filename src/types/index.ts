@@ -102,7 +102,6 @@ export interface ActionItem {
   dureeJours: number;
   dateDebut?: Date;
   dateFin?: Date;
-  progression: number; // 0-100%
 }
 
 export interface ActionPlan {

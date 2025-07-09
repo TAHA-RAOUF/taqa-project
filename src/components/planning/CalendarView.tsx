@@ -3,16 +3,13 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon,
-  Clock,
   AlertTriangle,
   Plus,
   Filter,
   Settings,
   Zap,
   CheckCircle,
-  Users,
   Wrench,
-  Eye,
   Edit,
   X
 } from 'lucide-react';
@@ -23,7 +20,6 @@ import { Anomaly, MaintenanceWindow, ActionPlan } from '../../types';
 import { formatDate, getCriticalityColor } from '../../lib/utils';
 import { MaintenanceWindowModal } from './MaintenanceWindowModal';
 import { planningIntegration } from '../../lib/planningUtils';
-import { generateId } from '../../lib/utils';
 import toast from 'react-hot-toast';
 
 interface CalendarViewProps {
@@ -355,7 +351,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   size="sm"
                   onClick={() => handleFilterChange('medium')}
                 >
-                  Moyenne
+                  Normale
                 </Button>
                 <Button
                   variant={filterCriticality === 'low' ? 'primary' : 'outline'}
@@ -862,7 +858,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                <span className="text-xs text-gray-600">Moyenne</span>
+                <span className="text-xs text-gray-600">Normale</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -1081,3 +1077,5 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     </div>
   );
 };
+
+export default CalendarView;

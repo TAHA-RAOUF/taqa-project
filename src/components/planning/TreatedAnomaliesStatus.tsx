@@ -125,7 +125,7 @@ export const TreatedAnomaliesStatus: React.FC<TreatedAnomaliesStatusProps> = ({
           {mediumLowUnassigned.length > 0 && (
             <div className="bg-yellow-50 p-4 rounded-lg">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold text-yellow-800">Moyenne/Faible</h3>
+                <h3 className="font-semibold text-yellow-800">Normale/Faible</h3>
                 <Badge variant="info">{mediumLowUnassigned.length}</Badge>
               </div>
               <p className="text-sm text-yellow-600">
@@ -160,3 +160,5 @@ export const TreatedAnomaliesStatus: React.FC<TreatedAnomaliesStatusProps> = ({
     </Card>
   );
 };
+
+export default TreatedAnomaliesStatus;

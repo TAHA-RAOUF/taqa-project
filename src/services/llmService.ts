@@ -66,23 +66,43 @@ Instructions :
       if (vectorContext.anomalies.length > 0) {
         systemPrompt += '\n\nAnomalies similaires trouvées:\n';
         vectorContext.anomalies.forEach((result, index) => {
-          const anomaly = result.metadata;
-          systemPrompt += `${index + 1}. ${anomaly.num_equipement}: ${anomaly.description} (Similarité: ${(result.similarity * 100).toFixed(1)}%, Status: ${anomaly.status}, Criticité: ${anomaly.final_criticality_level || 'N/A'})\n`;
+          const anomaly = result.metadata || {};
+          systemPrompt += `${index + 1}. ${anomaly.num_equipement || 'N/A'}: ${anomaly.description || 'Sans description'} (Similarité: ${(result.similarity * 100).toFixed(1)}%, Status: ${anomaly.status || 'N/A'}, Criticité: ${anomaly.final_criticality_level || 'N/A'})\n`;
+          
+          // Always include content if available
+          if (result.content) {
+            systemPrompt += `   Détails: ${result.content.substring(0, 300)}...\n`;
+          }
         });
       }
 
       if (vectorContext.maintenance.length > 0) {
         systemPrompt += '\n\nMaintenance similaire trouvée:\n';
         vectorContext.maintenance.forEach((result, index) => {
-          const maintenance = result.metadata;
-          systemPrompt += `${index + 1}. ${maintenance.name}: ${new Date(maintenance.start_time).toLocaleDateString('fr-FR')} (Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
+          const maintenance = result.metadata || {};
+          systemPrompt += `${index + 1}. ${maintenance.name || 'N/A'}: ${maintenance.start_time ? new Date(maintenance.start_time).toLocaleDateString('fr-FR') : 'Date non spécifiée'} (Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
+          
+          // Always include content if available
+          if (result.content) {
+            systemPrompt += `   Détails: ${result.content.substring(0, 300)}...\n`;
+          }
         });
       }
 
       if (vectorContext.knowledge.length > 0) {
         systemPrompt += '\n\nDocumentation pertinente:\n';
         vectorContext.knowledge.forEach((result, index) => {
-          systemPrompt += `${index + 1}. ${result.metadata.title}: ${result.content.substring(0, 200)}... (Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
+          const title = result.metadata?.title || 'Document sans titre';
+          systemPrompt += `${index + 1}. ${title}: `;
+          
+          // Always include full content for knowledge base items
+          if (result.content) {
+            systemPrompt += `${result.content.substring(0, 500)}... `;
+          } else {
+            systemPrompt += `[Contenu non disponible] `;
+          }
+          
+          systemPrompt += `(Similarité: ${(result.similarity * 100).toFixed(1)}%)\n`;
         });
       }
     }

@@ -13,6 +13,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { ActionPlanModal } from '../components/anomalies/ActionPlanModal';
+import { ActionPlanDetails } from '../components/anomalies/ActionPlanDetails';
+import { REXFileUpload } from '../components/anomalies/REXFileUpload';
 import { PredictionApproval } from '../components/anomalies/PredictionApproval';
 import { useData } from '../contexts/DataContext';
 import { formatDateTime, getCriticalityColor } from '../lib/utils';
@@ -23,7 +25,7 @@ import toast from 'react-hot-toast';
 export const AnomalyDetail: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { getAnomalyById, addActionPlan, updateActionPlan, actionPlans, getActionPlanByAnomalyId } = useData();
+  const { getAnomalyById, addActionPlan, updateActionPlan, updateAnomaly, actionPlans, getActionPlanByAnomalyId } = useData();
   
   // Find the anomaly (in a real app, this would be fetched from an API)
   const anomaly = id ? getAnomalyById(id) : undefined;
@@ -147,6 +149,19 @@ export const AnomalyDetail: React.FC = () => {
     toast.success('Commentaire ajouté');
     setNewComment('');
   };
+  
+  const handleAnomalyStatusUpdate = async (anomalyId: string, status: 'new' | 'in_progress' | 'treated' | 'closed') => {
+    if (!anomaly) return;
+    
+    try {
+      // Update the anomaly status
+      await updateAnomaly(anomalyId, { status });
+      toast.success(`Statut de l'anomalie mis à jour: ${status}`);
+    } catch (error) {
+      console.error('Error updating anomaly status:', error);
+      toast.error('Erreur lors de la mise à jour du statut');
+    }
+  };
 
   // Handle anomaly updates from PredictionApproval component
   const handleAnomalyUpdate = () => {
@@ -157,31 +172,30 @@ export const AnomalyDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      {/* Header */}
-<div className="flex items-center justify-between">
-  <div className="flex items-center space-x-4">
-    <Button variant="ghost" onClick={() => navigate('/anomalies')}>
-      <ArrowLeft className="h-4 w-4 mr-2" />
-      Retour
-    </Button>
-    <div className="flex items-center space-x-3">
-      <div className={`w-3 h-3 rounded-full ${getCriticalityColor(anomaly.criticalityLevel)}`} />
-      <h1 className="text-2xl font-bold text-gray-900">Détail de l'Anomalie</h1>
-    </div>
-  </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" onClick={() => navigate('/anomalies')}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour
+          </Button>
+          <div className="flex items-center space-x-3">
+            <div className={`w-3 h-3 rounded-full ${getCriticalityColor(anomaly.criticalityLevel)}`} />
+            <h1 className="text-2xl font-bold text-gray-900">Détail de l'Anomalie</h1>
+          </div>
+        </div>
 
-  <div className="flex space-x-2">
-    <Button 
-      onClick={() => setShowActionPlan(true)}
-      variant={actionPlan ? 'outline' : 'primary'}
-    >
-      <Wrench className="h-4 w-4 mr-2" />
-      {actionPlan ? 'Modifier Plan' : 'Plan d\'Action'}
-    </Button>
+        <div className="flex space-x-2">
+          <Button 
+            onClick={() => setShowActionPlan(true)}
+            variant={actionPlan ? 'outline' : 'primary'}
+          >
+            <Wrench className="h-4 w-4 mr-2" />
+            {actionPlan ? 'Modifier Plan' : 'Plan d\'Action'}
+          </Button>
 
-    {actionPlan && (
-      <div className="flex items-center space-x-2">
-        <Badge variant={
+          {actionPlan && (
+            <div className="flex items-center space-x-2">
+              <Badge variant={
           actionPlan.status === 'completed' ? 'success' :
           actionPlan.status === 'in_progress' ? 'warning' :
           actionPlan.status === 'approved' ? 'info' : 'default'
@@ -266,77 +280,21 @@ export const AnomalyDetail: React.FC = () => {
 
           {/* Action Plan Summary */}
           {actionPlan && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Wrench className="h-5 w-5 text-blue-600" />
-                  <span>Plan d'Action</span>
-                  <Badge variant={
-                    actionPlan.status === 'completed' ? 'success' :
-                    actionPlan.status === 'in_progress' ? 'warning' :
-                    actionPlan.status === 'approved' ? 'info' : 'default'
-                  }>
-                    {actionPlan.status}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                  <div className="bg-blue-50 p-3 rounded-lg">
-                    <div className="text-sm text-blue-600">Actions Totales</div>
-                    <div className="text-xl font-bold text-blue-900">{actionPlan.actions.length}</div>
-                  </div>
-                  <div className="bg-green-50 p-3 rounded-lg">
-                    <div className="text-sm text-green-600">Terminées</div>
-                    <div className="text-xl font-bold text-green-900">
-                      {actionPlan.actions.filter(a => a.statut === 'termine').length}
-                    </div>
-                  </div>
-                  <div className="bg-yellow-50 p-3 rounded-lg">
-                    <div className="text-sm text-yellow-600">En Cours</div>
-                    <div className="text-xl font-bold text-yellow-900">
-                      {actionPlan.actions.filter(a => a.statut === 'en_cours').length}
-                    </div>
-                  </div>
-                  <div className="bg-purple-50 p-3 rounded-lg">
-                    <div className="text-sm text-purple-600">Durée Totale</div>
-                    <div className="text-xl font-bold text-purple-900">
-                      {actionPlan.totalDurationDays}j {actionPlan.totalDurationHours}h
-                    </div>
-                  </div>
-                </div>
-                
-                {actionPlan.needsOutage && (
-                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <AlertTriangle className="w-4 h-4 text-orange-600" />
-                      <span className="text-sm font-medium text-orange-900">
-                        Arrêt {actionPlan.outageType} requis - {actionPlan.outageDuration} jour(s)
-                      </span>
-                    </div>
-                    {actionPlan.plannedDate && (
-                      <div className="text-xs text-orange-700 mt-1">
-                        Planifié pour: {actionPlan.plannedDate.toLocaleDateString()}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div className="mt-4">
-                  <div className="text-sm text-gray-600 mb-2">Progression globale</div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div 
-                      className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-                      style={{ width: `${actionPlan.completionPercentage}%` }}
-                    ></div>
-                  </div>
-                  <div className="text-right text-sm text-gray-500 mt-1">
-                    {actionPlan.completionPercentage}% terminé
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <ActionPlanDetails 
+              actionPlan={actionPlan} 
+              anomaly={anomaly} 
+              onActionPlanUpdate={setActionPlan} 
+              onAnomalyStatusUpdate={handleAnomalyStatusUpdate} 
+            />
           )}
+          
+          {/* REX File Upload - Only visible when anomaly is treated */}
+          <div className="mb-6">
+            <REXFileUpload 
+              anomalyId={anomaly.id}
+              isEnabled={anomaly.status === 'treated'} 
+            />
+          </div>
 
           {/* AI Predictions */}
           <PredictionApproval 

@@ -38,7 +38,7 @@ export const AnomalyChart: React.FC<AnomalyChartProps> = ({ data }) => {
             <Legend />
             <Bar dataKey="critical" stackId="a" fill="#ef4444" name="Critique" />
             <Bar dataKey="high" stackId="a" fill="#f97316" name="Élevée" />
-            <Bar dataKey="medium" stackId="a" fill="#eab308" name="Moyenne" />
+            <Bar dataKey="medium" stackId="a" fill="#eab308" name="Normale" />
             <Bar dataKey="low" stackId="a" fill="#22c55e" name="Faible" />
           </BarChart>
         </ResponsiveContainer>
