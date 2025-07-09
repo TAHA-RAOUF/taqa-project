@@ -47,18 +47,17 @@ export function generateId(): string {
 }
 
 export function calculateCriticality(
-  fiabilite: number,
-  integrite: number,
+  fiabilite_integrite: number,
   disponibilite: number,
   processSafety: number
 ): 'low' | 'medium' | 'high' | 'critical' {
   // Merge fiabilite and integrite, then calculate average of 3 scores out of 5
-  const fiabiliteIntegrite = (fiabilite + integrite) / 2;
-  const average = (fiabiliteIntegrite + disponibilite + processSafety) / 3;
+  const fiabiliteIntegrite = fiabilite_integrite;
+  const average = (fiabiliteIntegrite + disponibilite + processSafety);
   
-  if (average >= 4) return 'critical';
-  if (average >= 3) return 'high';
-  if (average >= 2) return 'medium';
+  if (average >= 13) return 'critical';
+  if (average >= 8) return 'high';
+  if (average >= 4) return 'medium';
   return 'low';
 }
 

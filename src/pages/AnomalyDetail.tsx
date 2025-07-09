@@ -445,7 +445,7 @@ export const AnomalyDetail: React.FC = () => {
                   Criticité: {currentScores.criticalityLevel}
                 </Badge>
                 <div className="text-sm text-gray-500">
-                  Score moyen: {((currentScores.fiabiliteIntegriteScore + currentScores.disponibiliteScore + currentScores.processSafetyScore) / 3).toFixed(1)}/5
+                  {((currentScores.fiabiliteIntegriteScore + currentScores.disponibiliteScore + currentScores.processSafetyScore)).toFixed(1)}/15
                 </div>
               </div>
               
