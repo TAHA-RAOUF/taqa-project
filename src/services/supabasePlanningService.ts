@@ -348,7 +348,7 @@ class SupabasePlanningService {
       }
 
       await loggingService.logMaintenanceAction(
-        'create_maintenance_window_with_schedules',
+        'create_maintenance_window',
         window.id,
         {
           description: `Created maintenance window with ${scheduledTimes.length} scheduled anomalies`,

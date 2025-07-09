@@ -4,3 +4,7 @@ export { PlanningStats } from './PlanningStats';
 export { AutoScheduler } from './AutoScheduler';
 export { QuickActions } from './QuickActions';
 export { CreateWindowModal } from './CreateWindowModal';
+export { WindowDetailModal } from './WindowDetailModal';
+export { PlanningAnalytics } from './PlanningAnalytics';
+export { WindowPlanningView } from './WindowPlanningView';
+export { CalendarPlanningView } from './CalendarPlanningView';

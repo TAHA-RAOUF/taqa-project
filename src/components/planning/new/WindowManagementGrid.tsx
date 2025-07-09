@@ -24,6 +24,8 @@ interface WindowManagementGridProps {
   onScheduleAnomaly: (anomalyId: string, windowId: string) => void;
   onCreateWindow: () => void;
   onUpdateWindow: (windowId: string, updates: Partial<MaintenanceWindow>) => void;
+  onViewWindow: (window: MaintenanceWindow) => void;
+  onEditWindow: (window: MaintenanceWindow) => void;
   viewMode?: 'overview' | 'detailed';
 }
 
@@ -32,6 +34,9 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
   anomalies,
   actionPlans,
   onCreateWindow,
+  onUpdateWindow,
+  onViewWindow,
+  onEditWindow,
   viewMode = 'overview'
 }) => {
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
@@ -168,7 +173,7 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
 
       {/* Windows Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {sortedWindows.map((window) => {
+        {sortedWindows.map((window, index) => {
           const stats = getWindowStats(window);
           const isSelected = selectedWindow === window.id;
           const isOverdue = new Date(window.startDate) < new Date() && window.status === 'planned';
@@ -176,60 +181,67 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
           return (
             <div
               key={window.id}
-              className="cursor-pointer"
+              className="cursor-pointer transform transition-all duration-200 hover:scale-105"
               onClick={() => setSelectedWindow(isSelected ? null : window.id)}
+              style={{ animationDelay: `${index * 100}ms` }}
             >
               <Card 
-                className={`transition-all duration-200 hover:shadow-lg ${
-                  isSelected ? 'ring-2 ring-blue-500 shadow-lg' : ''
-                } ${isOverdue ? 'border-red-300' : ''}`}
+                className={`transition-all duration-300 hover:shadow-xl card-hover ${
+                  isSelected ? 'ring-2 ring-blue-500 shadow-lg scale-105' : ''
+                } ${isOverdue ? 'border-red-300 bg-red-50' : 'bg-white'}`}
               >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`${getWindowTypeColor(window.type)} rounded-lg p-2`}>
-                      <Calendar className="h-4 w-4 text-white" />
+                    <div className={`${getWindowTypeColor(window.type)} rounded-xl p-3 shadow-sm`}>
+                      <Calendar className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                      <CardTitle className="text-sm font-semibold">
+                      <CardTitle className="text-base font-bold text-gray-900">
                         {window.type.toUpperCase()} Window
                       </CardTitle>
-                      <p className="text-xs text-gray-500">
-                        {window.durationDays} days
+                      <p className="text-sm text-gray-500 font-medium">
+                        {window.durationDays} jours de maintenance
                       </p>
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <Badge variant={getStatusBadgeVariant(window.status)} className="text-xs">
+                    <Badge variant={getStatusBadgeVariant(window.status)} className="text-xs font-medium">
                       {window.status.replace('_', ' ')}
                     </Badge>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="p-1 h-6 w-6"
+                      className="p-1.5 h-8 w-8 hover:bg-gray-100 rounded-full transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Add dropdown menu functionality here if needed
+                      }}
                     >
-                      <MoreVertical className="h-3 w-3" />
+                      <MoreVertical className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
 
-                {/* Window dates */}
-                <div className="text-xs text-gray-600 space-y-1">
+                {/* Window dates with enhanced styling */}
+                <div className="text-sm text-gray-600 space-y-2 mt-4 bg-gray-50 rounded-lg p-3">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-3 w-3" />
-                    <span>Start: {formatDate(window.startDate)}</span>
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    <span className="font-medium">Début:</span>
+                    <span>{formatDate(window.startDate)}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <ArrowRight className="h-3 w-3" />
-                    <span>End: {formatDate(window.endDate)}</span>
+                    <div className="w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="font-medium">Fin:</span>
+                    <span>{formatDate(window.endDate)}</span>
                   </div>
                 </div>
 
                 {isOverdue && (
-                  <div className="flex items-center gap-2 text-red-600 text-xs">
-                    <AlertTriangle className="h-3 w-3" />
-                    <span>Overdue</span>
+                  <div className="flex items-center gap-2 text-red-600 text-sm mt-3 bg-red-50 p-2 rounded-lg animate-gentle-pulse">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="font-medium">Fenêtre en retard</span>
                   </div>
                 )}
               </CardHeader>
@@ -309,18 +321,20 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-xs flex-1"
+                        className="text-sm flex-1 hover:bg-gray-50 transition-colors"
+                        onClick={() => onEditWindow(window)}
                       >
-                        <Edit className="h-3 w-3 mr-1" />
-                        Edit
+                        <Edit className="h-4 w-4 mr-2" />
+                        Modifier
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-xs flex-1"
+                        className="text-sm flex-1 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                        onClick={() => onViewWindow(window)}
                       >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View
+                        <Eye className="h-4 w-4 mr-2" />
+                        Voir
                       </Button>
                     </div>
                   </div>
