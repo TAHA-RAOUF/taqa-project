@@ -1,182 +1,114 @@
--- Create anomalies table with actual schema
-CREATE TABLE IF NOT EXISTS public.anomalies (
-    id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-    num_equipement TEXT NOT NULL,
-    description TEXT,
-    service TEXT,
-    responsable TEXT,
-    status TEXT DEFAULT 'nouvelle'::text CHECK (status IN ('nouvelle', 'en_cours', 'traite', 'cloture')),
-    source_origine TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    
-    -- AI scores (1-5 scale)
-    ai_fiabilite_integrite_score INTEGER CHECK (ai_fiabilite_integrite_score >= 1 AND ai_fiabilite_integrite_score <= 5),
-    ai_disponibilite_score INTEGER CHECK (ai_disponibilite_score >= 1 AND ai_disponibilite_score <= 5),
-    ai_process_safety_score INTEGER CHECK (ai_process_safety_score >= 1 AND ai_process_safety_score <= 5),
-    ai_criticality_level INTEGER CHECK (ai_criticality_level >= 1 AND ai_criticality_level <= 15),
-    
-    -- Human overrides (1-5 scale)
-    human_fiabilite_integrite_score INTEGER CHECK (human_fiabilite_integrite_score >= 1 AND human_fiabilite_integrite_score <= 5),
-    human_disponibilite_score INTEGER CHECK (human_disponibilite_score >= 1 AND human_disponibilite_score <= 5),
-    human_process_safety_score INTEGER CHECK (human_process_safety_score >= 1 AND human_process_safety_score <= 5),
-    human_criticality_level INTEGER CHECK (human_criticality_level >= 1 AND human_criticality_level <= 15),
-    
-    -- Final scores (generated columns)
-    final_fiabilite_integrite_score INTEGER GENERATED ALWAYS AS (
-        COALESCE(human_fiabilite_integrite_score, ai_fiabilite_integrite_score)
-    ) STORED,
-    final_disponibilite_score INTEGER GENERATED ALWAYS AS (
-        COALESCE(human_disponibilite_score, ai_disponibilite_score)
-    ) STORED,
-    final_process_safety_score INTEGER GENERATED ALWAYS AS (
-        COALESCE(human_process_safety_score, ai_process_safety_score)
-    ) STORED,
-    final_criticality_level INTEGER GENERATED ALWAYS AS (
-        COALESCE(human_criticality_level, ai_criticality_level)
-    ) STORED,
-    
-    -- Optional fields
-    estimated_hours INTEGER,
-    priority INTEGER,
-    maintenance_window_id UUID,
-    import_batch_id UUID
-);
+create table public.anomalies (
+  id uuid not null default gen_random_uuid (),
+  equipement_id text not null,
+  description text null,
+  service text null,
+  system_id text null,
+  status text null default 'nouvelle'::text,
+  source_origine text null,
+  created_at timestamp with time zone null default now(),
+  updated_at timestamp with time zone null default now(),
+  ai_fiabilite_integrite_score integer null,
+  ai_disponibilite_score integer null,
+  ai_process_safety_score integer null,
+  ai_criticality_level integer null,
+  human_fiabilite_integrite_score integer null,
+  human_disponibilite_score integer null,
+  human_process_safety_score integer null,
+  human_criticality_level integer null,
+  final_fiabilite_integrite_score integer GENERATED ALWAYS as (
+    COALESCE(
+      human_fiabilite_integrite_score,
+      ai_fiabilite_integrite_score
+    )
+  ) STORED null,
+  final_disponibilite_score integer GENERATED ALWAYS as (
+    COALESCE(human_disponibilite_score, ai_disponibilite_score)
+  ) STORED null,
+  final_process_safety_score integer GENERATED ALWAYS as (
+    COALESCE(
+      human_process_safety_score,
+      ai_process_safety_score
+    )
+  ) STORED null,
+  final_criticality_level integer GENERATED ALWAYS as (
+    COALESCE(human_criticality_level, ai_criticality_level)
+  ) STORED null,
+  estimated_hours integer null,
+  priority integer null,
+  maintenance_window_id uuid null,
+  import_batch_id uuid null,
+  constraint anomalies_pkey primary key (id),
+  constraint anomalies_ai_disponibilite_score_check check (
+    (
+      (ai_disponibilite_score >= 1)
+      and (ai_disponibilite_score <= 5)
+    )
+  ),
+  constraint anomalies_ai_fiabilite_integrite_score_check check (
+    (
+      (ai_fiabilite_integrite_score >= 1)
+      and (ai_fiabilite_integrite_score <= 5)
+    )
+  ),
+  constraint anomalies_ai_process_safety_score_check check (
+    (
+      (ai_process_safety_score >= 1)
+      and (ai_process_safety_score <= 5)
+    )
+  ),
+  constraint anomalies_human_criticality_level_check check (
+    (
+      (human_criticality_level >= 1)
+      and (human_criticality_level <= 15)
+    )
+  ),
+  constraint anomalies_human_disponibilite_score_check check (
+    (
+      (human_disponibilite_score >= 1)
+      and (human_disponibilite_score <= 5)
+    )
+  ),
+  constraint anomalies_human_fiabilite_integrite_score_check check (
+    (
+      (human_fiabilite_integrite_score >= 1)
+      and (human_fiabilite_integrite_score <= 5)
+    )
+  ),
+  constraint anomalies_human_process_safety_score_check check (
+    (
+      (human_process_safety_score >= 1)
+      and (human_process_safety_score <= 5)
+    )
+  ),
+  constraint anomalies_ai_criticality_level_check check (
+    (
+      (ai_criticality_level >= 1)
+      and (ai_criticality_level <= 15)
+    )
+  ),
+  constraint anomalies_status_check check (
+    (
+      status = any (
+        array[
+          'nouvelle'::text,
+          'en_cours'::text,
+          'traite'::text,
+          'cloture'::text
+        ]
+      )
+    )
+  )
+) TABLESPACE pg_default;
 
--- Create indexes for better query performance
-CREATE INDEX IF NOT EXISTS idx_anomalies_status ON public.anomalies(status);
-CREATE INDEX IF NOT EXISTS idx_anomalies_service ON public.anomalies(service);
-CREATE INDEX IF NOT EXISTS idx_anomalies_criticality ON public.anomalies(final_criticality_level);
-CREATE INDEX IF NOT EXISTS idx_anomalies_equipment ON public.anomalies(num_equipement);
-CREATE INDEX IF NOT EXISTS idx_anomalies_created_at ON public.anomalies(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_anomalies_responsible ON public.anomalies(responsable);
+create index IF not exists idx_anomalies_status on public.anomalies using btree (status) TABLESPACE pg_default;
 
--- Create a function to automatically update the updated_at timestamp
-CREATE OR REPLACE FUNCTION update_anomalies_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+create index IF not exists idx_anomalies_service on public.anomalies using btree (service) TABLESPACE pg_default;
 
--- Create trigger for updated_at
-CREATE TRIGGER trigger_anomalies_updated_at
-    BEFORE UPDATE ON public.anomalies
-    FOR EACH ROW
-    EXECUTE FUNCTION update_anomalies_updated_at();
+create index IF not exists idx_anomalies_criticality on public.anomalies using btree (final_criticality_level) TABLESPACE pg_default;
 
--- Enable RLS
-ALTER TABLE public.anomalies ENABLE ROW LEVEL SECURITY;
+create index IF not exists idx_anomalies_created_at on public.anomalies using btree (created_at) TABLESPACE pg_default;
 
--- Create RLS policies
-CREATE POLICY "Allow all operations for authenticated users" ON public.anomalies
-    FOR ALL USING (auth.role() = 'authenticated');
-
--- Allow anonymous read access for demo purposes
-CREATE POLICY "Allow anonymous read access" ON public.anomalies
-    FOR SELECT USING (true);
-
--- Insert sample data
-INSERT INTO public.anomalies (
-    num_equipement,
-    description, 
-    service, 
-    responsable, 
-    status, 
-    source_origine,
-    ai_fiabilite_integrite_score,
-    ai_disponibilite_score,
-    ai_process_safety_score,
-    ai_criticality_level,
-    estimated_hours,
-    priority
-) VALUES 
-(
-    'P-101',
-    'Vibrations anormales détectées sur la pompe centrifuge P-101 du circuit de refroidissement principal. Amplitude dépassant les limites acceptables.',
-    'Production',
-    'Ahmed Bennani',
-    'en_cours',
-    'Inspection préventive',
-    4,
-    3,
-    4,
-    12,
-    16,
-    1
-),
-(
-    'V-205',
-    'Fuite externe détectée au niveau du presse-étoupe de la vanne de régulation V-205. Débit de fuite estimé à 2 l/h.',
-    'Instrumentation',
-    'Fatima Zahra',
-    'nouvelle',
-    'Rapport opérateur',
-    3,
-    3,
-    3,
-    8,
-    8,
-    2
-),
-(
-    'R-301',
-    'Corrosion externe observée sur la paroi du réservoir R-301, zone exposée aux intempéries. Épaisseur résiduelle à vérifier.',
-    'Intégrité',
-    'Hassan Alami',
-    'nouvelle',
-    'Inspection NDT',
-    4,
-    4,
-    5,
-    14,
-    24,
-    1
-),
-(
-    'TE-402',
-    'Le capteur de température TE-402 affiche des valeurs erratiques. Écart de ±5°C par rapport aux capteurs adjacents.',
-    'Instrumentation',
-    'Youssef Idrissi',
-    'traite',
-    'Système de monitoring',
-    2,
-    2,
-    2,
-    3,
-    4,
-    3
-),
-(
-    'M-501',
-    'Analyse vibratoire révèle une usure avancée des paliers du moteur M-501. Recommandation de remplacement préventif.',
-    'Maintenance',
-    'Karim Benjelloun',
-    'nouvelle',
-    'Maintenance préventive',
-    4,
-    3,
-    4,
-    8,
-    12,
-    2
-);
-
--- Create a view for easy querying
-CREATE OR REPLACE VIEW anomalies_with_scores AS
-SELECT 
-    *,
-    CASE 
-        WHEN human_fiabilite_integrite_score IS NOT NULL THEN 
-            (human_fiabilite_integrite_score + 
-             COALESCE(human_disponibilite_score, ai_disponibilite_score) + 
-             COALESCE(human_process_safety_score, ai_process_safety_score)) / 3
-        ELSE 
-            (ai_fiabilite_integrite_score + ai_disponibilite_score + ai_process_safety_score) / 3
-    END as average_score,
-    CASE 
-        WHEN human_criticality_level IS NOT NULL THEN human_criticality_level
-        ELSE ai_criticality_level
-    END as effective_criticality
-FROM public.anomalies;
+create trigger trigger_archive_closed_anomaly BEFORE
+update on anomalies for EACH row
+execute FUNCTION archive_closed_anomaly ();

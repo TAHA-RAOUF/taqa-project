@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AlertTriangle, 
   CheckCircle, 
@@ -18,7 +18,21 @@ import { mockDashboardMetrics, mockChartData } from '../data/mockData';
 
 export const Dashboard: React.FC = () => {
   const { anomalies, getAnomalyStats } = useData();
-  const stats = getAnomalyStats();
+  const [stats, setStats] = useState({
+    total: 0,
+    open: 0,
+    critical: 0,
+    assigned: 0,
+    unassigned: 0
+  });
+
+  useEffect(() => {
+    const loadStats = async () => {
+      const anomalyStats = await getAnomalyStats();
+      setStats(anomalyStats);
+    };
+    loadStats();
+  }, [getAnomalyStats]);
   
   return (
     <div className="space-y-6">

@@ -1,59 +1,65 @@
 import { supabase } from '../lib/supabase';
 import { Anomaly } from '../types';
-import { combineFiabiliteIntegrite } from '../lib/scoringUtils';
 
-export interface BackendAnomaly {
+// Supabase anomaly interface that matches the actual schema
+export interface SupabaseAnomaly {
   id: string;
-  num_equipement: string;
+  equipement_id: string;
   description: string;
   service: string;
   responsable: string;
-  status: 'new' | 'in_progress' | 'treated' | 'closed';
+  status: 'nouvelle' | 'en_cours' | 'traite' | 'cloture';
   source_origine: string;
   created_at: string;
   updated_at: string;
   
-  // AI Predictions (backend still uses separate scores)
-  fiabilite_score: number;
-  integrite_score: number;
-  disponibilite_score: number;
-  process_safety_score: number;
-  criticality_level: 'low' | 'medium' | 'high' | 'critical';
+  // AI scores (1-5 scale)
+  ai_fiabilite_integrite_score: number;
+  ai_disponibilite_score: number;
+  ai_process_safety_score: number;
+  ai_criticality_level: number;
   
-  // User overrides
-  user_fiabilite_score?: number;
-  user_integrite_score?: number;
-  user_disponibilite_score?: number;
-  user_process_safety_score?: number;
-  user_criticality_level?: 'low' | 'medium' | 'high' | 'critical';
-  use_user_scores?: boolean;
+  // Human overrides (1-5 scale)
+  human_fiabilite_integrite_score?: number;
+  human_disponibilite_score?: number;
+  human_process_safety_score?: number;
+  human_criticality_level?: number;
+  
+  // Final scores (computed columns)
+  final_fiabilite_integrite_score: number;
+  final_disponibilite_score: number;
+  final_process_safety_score: number;
+  final_criticality_level: number;
   
   // Optional fields
   estimated_hours?: number;
   priority?: number;
   maintenance_window_id?: string;
-  
-  // Metadata
-  last_modified_by?: string;
-  last_modified_at?: string;
+  import_batch_id?: string;
+  system_id?: string;
 }
 
 export interface CreateAnomalyData {
-  num_equipement: string;
+  equipement_id: string;
   description: string;
   service: string;
   responsable: string;
   source_origine: string;
-  status?: 'new' | 'in_progress' | 'treated' | 'closed';
+  status?: 'nouvelle' | 'en_cours' | 'traite' | 'cloture';
   estimated_hours?: number;
   priority?: number;
   
-  // User score overrides
-  user_fiabilite_score?: number;
-  user_integrite_score?: number;
-  user_disponibilite_score?: number;
-  user_process_safety_score?: number;
-  use_user_scores?: boolean;
+  // AI scores (optional for create)
+  ai_fiabilite_integrite_score?: number;
+  ai_disponibilite_score?: number;
+  ai_process_safety_score?: number;
+  ai_criticality_level?: number;
+  
+  // Human overrides (optional)
+  human_fiabilite_integrite_score?: number;
+  human_disponibilite_score?: number;
+  human_process_safety_score?: number;
+  human_criticality_level?: number;
 }
 
 export interface UpdateAnomalyData extends Partial<CreateAnomalyData> {
@@ -69,214 +75,10 @@ export interface AnomalyFilters {
   per_page?: number;
 }
 
-export interface BatchCreateData {
-  anomalies: CreateAnomalyData[];
-}
-
-export interface BulkStatusUpdateData {
-  anomaly_ids: string[];
-  status: 'new' | 'in_progress' | 'treated' | 'closed';
-}
-
 export class AnomalyService {
-  private readonly RAILWAY_URL = 'https://tams-model-production.up.railway.app';
-
-  // Convert BackendAnomaly to frontend Anomaly format
-  private convertToFrontendAnomaly(backendAnomaly: BackendAnomaly): Anomaly {
-    return {
-      id: backendAnomaly.id,
-      title: backendAnomaly.description.substring(0, 50) + '...', // Extract title from description
-      description: backendAnomaly.description,
-      equipmentId: backendAnomaly.num_equipement,
-      service: backendAnomaly.service,
-      responsiblePerson: backendAnomaly.responsable,
-      status: backendAnomaly.status,
-      originSource: backendAnomaly.source_origine,
-      createdAt: new Date(backendAnomaly.created_at),
-      updatedAt: new Date(backendAnomaly.updated_at),
-      
-      // Convert separate scores to combined format
-      fiabiliteIntegriteScore: combineFiabiliteIntegrite(
-        backendAnomaly.fiabilite_score,
-        backendAnomaly.integrite_score
-      ),
-      disponibiliteScore: (backendAnomaly.disponibilite_score / 10) * 5, // Convert to /5 scale
-      processSafetyScore: (backendAnomaly.process_safety_score / 10) * 5, // Convert to /5 scale
-      criticalityLevel: backendAnomaly.criticality_level,
-      
-      // User overrides
-      userFiabiliteIntegriteScore: backendAnomaly.user_fiabilite_score && backendAnomaly.user_integrite_score
-        ? combineFiabiliteIntegrite(backendAnomaly.user_fiabilite_score, backendAnomaly.user_integrite_score)
-        : undefined,
-      userDisponibiliteScore: backendAnomaly.user_disponibilite_score 
-        ? (backendAnomaly.user_disponibilite_score / 10) * 5 
-        : undefined,
-      userProcessSafetyScore: backendAnomaly.user_process_safety_score 
-        ? (backendAnomaly.user_process_safety_score / 10) * 5 
-        : undefined,
-      userCriticalityLevel: backendAnomaly.user_criticality_level,
-      useUserScores: backendAnomaly.use_user_scores,
-      
-      // Optional fields
-      estimatedHours: backendAnomaly.estimated_hours,
-      priority: backendAnomaly.priority,
-      maintenanceWindowId: backendAnomaly.maintenance_window_id,
-      lastModifiedBy: backendAnomaly.last_modified_by,
-      lastModifiedAt: backendAnomaly.last_modified_at ? new Date(backendAnomaly.last_modified_at) : undefined
-    };
-  }
-
-  // Convert frontend Anomaly to backend format
-  private convertToBackendFormat(anomaly: Partial<Anomaly>): Partial<CreateAnomalyData> {
-    return {
-      num_equipement: anomaly.equipmentId,
-      description: anomaly.description,
-      service: anomaly.service,
-      responsable: anomaly.responsiblePerson,
-      source_origine: anomaly.originSource,
-      status: anomaly.status,
-      estimated_hours: anomaly.estimatedHours,
-      priority: anomaly.priority,
-      
-      // Convert combined scores back to separate scores (if user scores are provided)
-      user_fiabilite_score: anomaly.userFiabiliteIntegriteScore ? anomaly.userFiabiliteIntegriteScore * 2 : undefined,
-      user_integrite_score: anomaly.userFiabiliteIntegriteScore ? anomaly.userFiabiliteIntegriteScore * 2 : undefined,
-      user_disponibilite_score: anomaly.userDisponibiliteScore ? anomaly.userDisponibiliteScore * 2 : undefined,
-      user_process_safety_score: anomaly.userProcessSafetyScore ? anomaly.userProcessSafetyScore * 2 : undefined,
-      use_user_scores: anomaly.useUserScores
-    };
-  }
-
-  // Sync anomalies from Railway to Supabase
-  async syncAnomaliesFromRailway(): Promise<Anomaly[]> {
-    try {
-      const response = await fetch(`${this.RAILWAY_URL}/anomalies`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const backendAnomalies: BackendAnomaly[] = await response.json();
-      const frontendAnomalies = backendAnomalies.map(a => this.convertToFrontendAnomaly(a));
-      
-      // Store in Supabase
-      const { error } = await supabase
-        .from('anomalies')
-        .upsert(frontendAnomalies.map(a => ({
-          id: a.id,
-          title: a.title,
-          description: a.description,
-          equipment_id: a.equipmentId,
-          service: a.service,
-          responsible_person: a.responsiblePerson,
-          status: a.status,
-          origin_source: a.originSource,
-          created_at: a.createdAt.toISOString(),
-          updated_at: a.updatedAt.toISOString(),
-          fiabilite_integrite_score: a.fiabiliteIntegriteScore,
-          disponibilite_score: a.disponibiliteScore,
-          process_safety_score: a.processSafetyScore,
-          criticality_level: a.criticalityLevel,
-          user_fiabilite_integrite_score: a.userFiabiliteIntegriteScore,
-          user_disponibilite_score: a.userDisponibiliteScore,
-          user_process_safety_score: a.userProcessSafetyScore,
-          user_criticality_level: a.userCriticalityLevel,
-          use_user_scores: a.useUserScores,
-          estimated_hours: a.estimatedHours,
-          priority: a.priority,
-          maintenance_window_id: a.maintenanceWindowId,
-          last_modified_by: a.lastModifiedBy,
-          last_modified_at: a.lastModifiedAt?.toISOString()
-        })));
-      
-      if (error) {
-        console.error('Error syncing to Supabase:', error);
-      }
-      
-      return frontendAnomalies;
-    } catch (error) {
-      console.error('Error syncing anomalies:', error);
-      return [];
-    }
-  }
-
-  // Get all anomalies from Supabase using actual table schema
-  async getAllAnomalies(filters: AnomalyFilters = {}): Promise<Anomaly[]> {
-    try {
-      let query = supabase.from('anomalies').select('*');
-      
-      // Apply filters based on actual table structure
-      if (filters.status) {
-        query = query.eq('status', filters.status);
-      }
-      if (filters.service) {
-        query = query.eq('service', filters.service);
-      }
-      if (filters.criticality_level) {
-        query = query.eq('final_criticality_level', filters.criticality_level);
-      }
-      if (filters.search) {
-        query = query.or(`description.ilike.%${filters.search}%,num_equipement.ilike.%${filters.search}%,service.ilike.%${filters.search}%`);
-      }
-      
-      // Pagination
-      if (filters.page && filters.per_page) {
-        const from = (filters.page - 1) * filters.per_page;
-        const to = from + filters.per_page - 1;
-        query = query.range(from, to);
-      }
-      
-      const { data, error } = await query.order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error('Error fetching from Supabase:', error);
-        return [];
-      }
-      
-      // Convert Supabase data to frontend format
-      return data?.map(row => {
-        console.log('Supabase row:', row); // Debug log
-        return {
-          id: row.id,
-          title: row.num_equipement || 'Anomalie', // Use equipment number as title
-          description: row.description || '',
-          equipmentId: row.num_equipement || '',
-          service: row.service || '',
-          responsiblePerson: row.responsable || '',
-          status: this.mapStatus(row.status || 'nouvelle'),
-          originSource: row.source_origine || '',
-          createdAt: new Date(row.created_at),
-          updatedAt: new Date(row.updated_at),
-          
-          // Map scoring system (convert from 1-5 to 0-5 scale)
-          fiabiliteIntegriteScore: row.final_fiabilite_integrite_score || row.ai_fiabilite_integrite_score || 2.5,
-          disponibiliteScore: row.final_disponibilite_score || row.ai_disponibilite_score || 2.5,
-          processSafetyScore: row.final_process_safety_score || row.ai_process_safety_score || 2.5,
-          criticalityLevel: this.mapCriticalityLevel(row.final_criticality_level || row.ai_criticality_level || 8),
-          
-          // User overrides
-          userFiabiliteIntegriteScore: row.human_fiabilite_integrite_score,
-          userDisponibiliteScore: row.human_disponibilite_score,
-          userProcessSafetyScore: row.human_process_safety_score,
-          userCriticalityLevel: row.human_criticality_level ? this.mapCriticalityLevel(row.human_criticality_level) : undefined,
-          useUserScores: !!(row.human_fiabilite_integrite_score || row.human_disponibilite_score || row.human_process_safety_score),
-          
-          // Optional fields
-          estimatedHours: row.estimated_hours,
-          priority: row.priority || 1,
-          maintenanceWindowId: row.maintenance_window_id,
-          lastModifiedBy: undefined,
-          lastModifiedAt: undefined
-        };
-      }) || [];
-    } catch (error) {
-      console.error('Error in getAllAnomalies:', error);
-      return [];
-    }
-  }
-
-  // Map status from database to frontend format
-  private mapStatus(dbStatus: string): 'new' | 'in_progress' | 'treated' | 'closed' {
-    switch (dbStatus) {
+  // Map Supabase status to frontend status
+  private mapStatusToFrontend(status: string): 'new' | 'in_progress' | 'treated' | 'closed' {
+    switch (status) {
       case 'nouvelle': return 'new';
       case 'en_cours': return 'in_progress';
       case 'traite': return 'treated';
@@ -285,229 +87,368 @@ export class AnomalyService {
     }
   }
 
-  // Map criticality level from 1-15 scale to text
-  private mapCriticalityLevel(level: number): 'low' | 'medium' | 'high' | 'critical' {
-    if (level <= 3) return 'low';
-    if (level <= 6) return 'medium';
-    if (level <= 12) return 'high';
+  // Map frontend status to Supabase status
+  private mapStatusToSupabase(status: 'new' | 'in_progress' | 'treated' | 'closed'): 'nouvelle' | 'en_cours' | 'traite' | 'cloture' {
+    switch (status) {
+      case 'new': return 'nouvelle';
+      case 'in_progress': return 'en_cours';
+      case 'treated': return 'traite';
+      case 'closed': return 'cloture';
+      default: return 'nouvelle';
+    }
+  }
+
+  // Calculate criticality level based on the sum of the three scores
+  private calculateCriticalityLevel(totalScore: number): 'low' | 'medium' | 'high' | 'critical' {
+    // Total score ranges from 3 to 15
+    if (totalScore <= 6) return 'low';
+    if (totalScore <= 9) return 'medium';
+    if (totalScore <= 12) return 'high';
     return 'critical';
   }
 
-  async getAnomaly(id: string): Promise<Anomaly | null> {
+  // Convert SupabaseAnomaly to frontend Anomaly format
+  private convertToFrontendAnomaly(supabaseAnomaly: SupabaseAnomaly): Anomaly {
+    const criticalityLevel = this.calculateCriticalityLevel(supabaseAnomaly.final_criticality_level);
+    
+    return {
+      id: supabaseAnomaly.id,
+      title: supabaseAnomaly.description.substring(0, 50) + (supabaseAnomaly.description.length > 50 ? '...' : ''),
+      description: supabaseAnomaly.description,
+      equipmentId: supabaseAnomaly.equipement_id,
+      service: supabaseAnomaly.service,
+      responsiblePerson: supabaseAnomaly.responsable,
+      status: this.mapStatusToFrontend(supabaseAnomaly.status),
+      originSource: supabaseAnomaly.source_origine,
+      createdAt: new Date(supabaseAnomaly.created_at),
+      updatedAt: new Date(supabaseAnomaly.updated_at),
+      
+      // Use final scores from database
+      fiabiliteIntegriteScore: supabaseAnomaly.final_fiabilite_integrite_score,
+      disponibiliteScore: supabaseAnomaly.final_disponibilite_score,
+      processSafetyScore: supabaseAnomaly.final_process_safety_score,
+      criticalityLevel: criticalityLevel,
+      
+      // User overrides
+      userFiabiliteIntegriteScore: supabaseAnomaly.human_fiabilite_integrite_score,
+      userDisponibiliteScore: supabaseAnomaly.human_disponibilite_score,
+      userProcessSafetyScore: supabaseAnomaly.human_process_safety_score,
+      userCriticalityLevel: supabaseAnomaly.human_criticality_level ? 
+        this.calculateCriticalityLevel(supabaseAnomaly.human_criticality_level) : undefined,
+      useUserScores: !!(supabaseAnomaly.human_fiabilite_integrite_score || 
+                        supabaseAnomaly.human_disponibilite_score || 
+                        supabaseAnomaly.human_process_safety_score),
+      
+      // Optional fields
+      estimatedHours: supabaseAnomaly.estimated_hours,
+      priority: supabaseAnomaly.priority,
+      maintenanceWindowId: supabaseAnomaly.maintenance_window_id,
+    };
+  }
+
+  // Get all anomalies from Supabase
+  async getAllAnomalies(filters: AnomalyFilters = {}): Promise<Anomaly[]> {
+    try {
+      let query = supabase
+        .from('anomalies')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (filters.status && filters.status !== 'all') {
+        const supabaseStatus = this.mapStatusToSupabase(filters.status as any);
+        query = query.eq('status', supabaseStatus);
+      }
+
+      if (filters.service && filters.service !== 'all') {
+        query = query.eq('service', filters.service);
+      }
+
+      if (filters.search) {
+        query = query.or(`description.ilike.%${filters.search}%,equipement_id.ilike.%${filters.search}%,responsable.ilike.%${filters.search}%`);
+      }
+
+      // Apply pagination
+      if (filters.page && filters.per_page) {
+        const from = (filters.page - 1) * filters.per_page;
+        const to = from + filters.per_page - 1;
+        query = query.range(from, to);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching anomalies:', error);
+        throw error;
+      }
+
+      return (data || []).map(this.convertToFrontendAnomaly.bind(this));
+    } catch (error) {
+      console.error('Error in getAllAnomalies:', error);
+      throw error;
+    }
+  }
+
+  // Get anomaly by ID
+  async getAnomalyById(id: string): Promise<Anomaly | null> {
     try {
       const { data, error } = await supabase
         .from('anomalies')
         .select('*')
         .eq('id', id)
         .single();
-      
-      if (error || !data) {
-        return null;
+
+      if (error) {
+        console.error('Error fetching anomaly:', error);
+        throw error;
       }
-      
-      return {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        equipmentId: data.equipment_id,
-        service: data.service,
-        responsiblePerson: data.responsible_person,
-        status: data.status,
-        originSource: data.origin_source,
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at),
-        fiabiliteIntegriteScore: data.fiabilite_integrite_score,
-        disponibiliteScore: data.disponibilite_score,
-        processSafetyScore: data.process_safety_score,
-        criticalityLevel: data.criticality_level,
-        userFiabiliteIntegriteScore: data.user_fiabilite_integrite_score,
-        userDisponibiliteScore: data.user_disponibilite_score,
-        userProcessSafetyScore: data.user_process_safety_score,
-        userCriticalityLevel: data.user_criticality_level,
-        useUserScores: data.use_user_scores,
-        estimatedHours: data.estimated_hours,
-        priority: data.priority,
-        maintenanceWindowId: data.maintenance_window_id,
-        lastModifiedBy: data.last_modified_by,
-        lastModifiedAt: data.last_modified_at ? new Date(data.last_modified_at) : undefined
-      };
+
+      return data ? this.convertToFrontendAnomaly(data) : null;
     } catch (error) {
-      console.error('Error fetching anomaly:', error);
-      return null;
+      console.error('Error in getAnomalyById:', error);
+      throw error;
     }
   }
 
+  // Create new anomaly
   async createAnomaly(anomalyData: Partial<Anomaly>): Promise<Anomaly | null> {
     try {
-      // Send to Railway backend first
-      const backendData = this.convertToBackendFormat(anomalyData);
-      const response = await fetch(`${this.RAILWAY_URL}/store/single`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(backendData),
-      });
+      const supabaseData = {
+        equipement_id: anomalyData.equipmentId || '',
+        description: anomalyData.description || '',
+        service: anomalyData.service || '',
+        responsable: anomalyData.responsiblePerson || '',
+        source_origine: anomalyData.originSource || 'Manual',
+        status: anomalyData.status ? this.mapStatusToSupabase(anomalyData.status) : 'nouvelle',
+        estimated_hours: anomalyData.estimatedHours,
+        priority: anomalyData.priority || 1,
+        
+        // Set AI scores with defaults
+        ai_fiabilite_integrite_score: anomalyData.fiabiliteIntegriteScore || 3,
+        ai_disponibilite_score: anomalyData.disponibiliteScore || 3,
+        ai_process_safety_score: anomalyData.processSafetyScore || 3,
+        ai_criticality_level: (anomalyData.fiabiliteIntegriteScore || 3) + 
+                             (anomalyData.disponibiliteScore || 3) + 
+                             (anomalyData.processSafetyScore || 3),
+        
+        // Set human scores if provided
+        human_fiabilite_integrite_score: anomalyData.userFiabiliteIntegriteScore,
+        human_disponibilite_score: anomalyData.userDisponibiliteScore,
+        human_process_safety_score: anomalyData.userProcessSafetyScore,
+        human_criticality_level: anomalyData.userFiabiliteIntegriteScore && 
+                                anomalyData.userDisponibiliteScore && 
+                                anomalyData.userProcessSafetyScore ?
+                                anomalyData.userFiabiliteIntegriteScore + 
+                                anomalyData.userDisponibiliteScore + 
+                                anomalyData.userProcessSafetyScore : undefined,
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const backendAnomaly: BackendAnomaly = await response.json();
-      const frontendAnomaly = this.convertToFrontendAnomaly(backendAnomaly);
-      
-      // Also store in Supabase
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('anomalies')
-        .insert({
-          id: frontendAnomaly.id,
-          title: frontendAnomaly.title,
-          description: frontendAnomaly.description,
-          equipment_id: frontendAnomaly.equipmentId,
-          service: frontendAnomaly.service,
-          responsible_person: frontendAnomaly.responsiblePerson,
-          status: frontendAnomaly.status,
-          origin_source: frontendAnomaly.originSource,
-          created_at: frontendAnomaly.createdAt.toISOString(),
-          updated_at: frontendAnomaly.updatedAt.toISOString(),
-          fiabilite_integrite_score: frontendAnomaly.fiabiliteIntegriteScore,
-          disponibilite_score: frontendAnomaly.disponibiliteScore,
-          process_safety_score: frontendAnomaly.processSafetyScore,
-          criticality_level: frontendAnomaly.criticalityLevel,
-          user_fiabilite_integrite_score: frontendAnomaly.userFiabiliteIntegriteScore,
-          user_disponibilite_score: frontendAnomaly.userDisponibiliteScore,
-          user_process_safety_score: frontendAnomaly.userProcessSafetyScore,
-          user_criticality_level: frontendAnomaly.userCriticalityLevel,
-          use_user_scores: frontendAnomaly.useUserScores,
-          estimated_hours: frontendAnomaly.estimatedHours,
-          priority: frontendAnomaly.priority,
-          maintenance_window_id: frontendAnomaly.maintenanceWindowId,
-          last_modified_by: frontendAnomaly.lastModifiedBy,
-          last_modified_at: frontendAnomaly.lastModifiedAt?.toISOString()
-        });
-      
+        .insert([supabaseData])
+        .select()
+        .single();
+
       if (error) {
-        console.error('Error storing in Supabase:', error);
+        console.error('Error creating anomaly:', error);
+        throw error;
       }
-      
-      return frontendAnomaly;
+
+      return data ? this.convertToFrontendAnomaly(data) : null;
     } catch (error) {
-      console.error('Error creating anomaly:', error);
-      return null;
+      console.error('Error in createAnomaly:', error);
+      throw error;
     }
   }
 
+  // Update anomaly
   async updateAnomaly(id: string, updates: Partial<Anomaly>): Promise<Anomaly | null> {
     try {
-      // Update in Supabase
+      const supabaseUpdates: any = {};
+
+      if (updates.equipmentId !== undefined) supabaseUpdates.equipement_id = updates.equipmentId;
+      if (updates.description !== undefined) supabaseUpdates.description = updates.description;
+      if (updates.service !== undefined) supabaseUpdates.service = updates.service;
+      if (updates.responsiblePerson !== undefined) supabaseUpdates.responsable = updates.responsiblePerson;
+      if (updates.originSource !== undefined) supabaseUpdates.source_origine = updates.originSource;
+      if (updates.status !== undefined) supabaseUpdates.status = this.mapStatusToSupabase(updates.status);
+      if (updates.estimatedHours !== undefined) supabaseUpdates.estimated_hours = updates.estimatedHours;
+      if (updates.priority !== undefined) supabaseUpdates.priority = updates.priority;
+      if (updates.maintenanceWindowId !== undefined) supabaseUpdates.maintenance_window_id = updates.maintenanceWindowId;
+
+      // Handle user score updates
+      if (updates.userFiabiliteIntegriteScore !== undefined) {
+        supabaseUpdates.human_fiabilite_integrite_score = updates.userFiabiliteIntegriteScore;
+      }
+      if (updates.userDisponibiliteScore !== undefined) {
+        supabaseUpdates.human_disponibilite_score = updates.userDisponibiliteScore;
+      }
+      if (updates.userProcessSafetyScore !== undefined) {
+        supabaseUpdates.human_process_safety_score = updates.userProcessSafetyScore;
+      }
+
+      // Recalculate human criticality level if any user scores are provided
+      if (updates.userFiabiliteIntegriteScore || updates.userDisponibiliteScore || updates.userProcessSafetyScore) {
+        // Get current data to calculate new criticality
+        const current = await this.getAnomalyById(id);
+        if (current) {
+          const newFiabilite = updates.userFiabiliteIntegriteScore ?? current.userFiabiliteIntegriteScore ?? current.fiabiliteIntegriteScore;
+          const newDisponibilite = updates.userDisponibiliteScore ?? current.userDisponibiliteScore ?? current.disponibiliteScore;
+          const newProcessSafety = updates.userProcessSafetyScore ?? current.userProcessSafetyScore ?? current.processSafetyScore;
+          
+          supabaseUpdates.human_criticality_level = newFiabilite + newDisponibilite + newProcessSafety;
+        }
+      }
+
       const { data, error } = await supabase
         .from('anomalies')
-        .update({
-          title: updates.title,
-          description: updates.description,
-          equipment_id: updates.equipmentId,
-          service: updates.service,
-          responsible_person: updates.responsiblePerson,
-          status: updates.status,
-          origin_source: updates.originSource,
-          updated_at: new Date().toISOString(),
-          fiabilite_integrite_score: updates.fiabiliteIntegriteScore,
-          disponibilite_score: updates.disponibiliteScore,
-          process_safety_score: updates.processSafetyScore,
-          criticality_level: updates.criticalityLevel,
-          user_fiabilite_integrite_score: updates.userFiabiliteIntegriteScore,
-          user_disponibilite_score: updates.userDisponibiliteScore,
-          user_process_safety_score: updates.userProcessSafetyScore,
-          user_criticality_level: updates.userCriticalityLevel,
-          use_user_scores: updates.useUserScores,
-          estimated_hours: updates.estimatedHours,
-          priority: updates.priority,
-          maintenance_window_id: updates.maintenanceWindowId,
-          last_modified_by: updates.lastModifiedBy,
-          last_modified_at: updates.lastModifiedAt?.toISOString()
-        })
+        .update(supabaseUpdates)
         .eq('id', id)
         .select()
         .single();
-      
-      if (error || !data) {
-        throw new Error('Failed to update anomaly');
+
+      if (error) {
+        console.error('Error updating anomaly:', error);
+        throw error;
       }
-      
-      return {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        equipmentId: data.equipment_id,
-        service: data.service,
-        responsiblePerson: data.responsible_person,
-        status: data.status,
-        originSource: data.origin_source,
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at),
-        fiabiliteIntegriteScore: data.fiabilite_integrite_score,
-        disponibiliteScore: data.disponibilite_score,
-        processSafetyScore: data.process_safety_score,
-        criticalityLevel: data.criticality_level,
-        userFiabiliteIntegriteScore: data.user_fiabilite_integrite_score,
-        userDisponibiliteScore: data.user_disponibilite_score,
-        userProcessSafetyScore: data.user_process_safety_score,
-        userCriticalityLevel: data.user_criticality_level,
-        useUserScores: data.use_user_scores,
-        estimatedHours: data.estimated_hours,
-        priority: data.priority,
-        maintenanceWindowId: data.maintenance_window_id,
-        lastModifiedBy: data.last_modified_by,
-        lastModifiedAt: data.last_modified_at ? new Date(data.last_modified_at) : undefined
-      };
+
+      return data ? this.convertToFrontendAnomaly(data) : null;
     } catch (error) {
-      console.error('Error updating anomaly:', error);
-      return null;
+      console.error('Error in updateAnomaly:', error);
+      throw error;
     }
   }
 
+  // Delete anomaly
   async deleteAnomaly(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
         .from('anomalies')
         .delete()
         .eq('id', id);
-      
-      return !error;
+
+      if (error) {
+        console.error('Error deleting anomaly:', error);
+        throw error;
+      }
+
+      return true;
     } catch (error) {
-      console.error('Error deleting anomaly:', error);
-      return false;
+      console.error('Error in deleteAnomaly:', error);
+      throw error;
     }
   }
 
-  async updateStatus(id: string, status: 'new' | 'in_progress' | 'treated' | 'closed'): Promise<Anomaly | null> {
-    return this.updateAnomaly(id, { status });
-  }
+  // Get anomaly statistics
+  async getAnomalyStats(): Promise<{
+    total: number;
+    byStatus: Record<string, number>;
+    byService: Record<string, number>;
+    byCriticality: Record<string, number>;
+  }> {
+    try {
+      const { data, error } = await supabase
+        .from('anomalies')
+        .select('status, service, final_criticality_level');
 
-  async batchCreate(anomalies: Partial<Anomaly>[]): Promise<Anomaly[]> {
-    const results: Anomaly[] = [];
-    
-    for (const anomaly of anomalies) {
-      const created = await this.createAnomaly(anomaly);
-      if (created) {
-        results.push(created);
+      if (error) {
+        console.error('Error fetching anomaly stats:', error);
+        throw error;
       }
+
+      const stats = {
+        total: data?.length || 0,
+        byStatus: {} as Record<string, number>,
+        byService: {} as Record<string, number>,
+        byCriticality: {} as Record<string, number>,
+      };
+
+      data?.forEach(anomaly => {
+        // Count by status
+        const frontendStatus = this.mapStatusToFrontend(anomaly.status);
+        stats.byStatus[frontendStatus] = (stats.byStatus[frontendStatus] || 0) + 1;
+
+        // Count by service
+        stats.byService[anomaly.service] = (stats.byService[anomaly.service] || 0) + 1;
+
+        // Count by criticality
+        const criticalityLevel = this.calculateCriticalityLevel(anomaly.final_criticality_level);
+        stats.byCriticality[criticalityLevel] = (stats.byCriticality[criticalityLevel] || 0) + 1;
+      });
+
+      return stats;
+    } catch (error) {
+      console.error('Error in getAnomalyStats:', error);
+      throw error;
     }
-    
-    return results;
   }
 
-  async bulkUpdateStatus(anomalyIds: string[], status: 'new' | 'in_progress' | 'treated' | 'closed'): Promise<Anomaly[]> {
-    const results: Anomaly[] = [];
-    
-    for (const id of anomalyIds) {
-      const updated = await this.updateStatus(id, status);
-      if (updated) {
-        results.push(updated);
+  // Batch create anomalies
+  async batchCreateAnomalies(anomalies: CreateAnomalyData[]): Promise<Anomaly[]> {
+    try {
+      const supabaseData = anomalies.map(anomaly => ({
+        equipement_id: anomaly.equipement_id,
+        description: anomaly.description,
+        service: anomaly.service,
+        responsable: anomaly.responsable,
+        source_origine: anomaly.source_origine,
+        status: anomaly.status || 'nouvelle',
+        estimated_hours: anomaly.estimated_hours,
+        priority: anomaly.priority || 1,
+        ai_fiabilite_integrite_score: anomaly.ai_fiabilite_integrite_score || 3,
+        ai_disponibilite_score: anomaly.ai_disponibilite_score || 3,
+        ai_process_safety_score: anomaly.ai_process_safety_score || 3,
+        ai_criticality_level: (anomaly.ai_fiabilite_integrite_score || 3) + 
+                             (anomaly.ai_disponibilite_score || 3) + 
+                             (anomaly.ai_process_safety_score || 3),
+        human_fiabilite_integrite_score: anomaly.human_fiabilite_integrite_score,
+        human_disponibilite_score: anomaly.human_disponibilite_score,
+        human_process_safety_score: anomaly.human_process_safety_score,
+        human_criticality_level: anomaly.human_fiabilite_integrite_score && 
+                                anomaly.human_disponibilite_score && 
+                                anomaly.human_process_safety_score ?
+                                anomaly.human_fiabilite_integrite_score + 
+                                anomaly.human_disponibilite_score + 
+                                anomaly.human_process_safety_score : undefined,
+      }));
+
+      const { data, error } = await supabase
+        .from('anomalies')
+        .insert(supabaseData)
+        .select();
+
+      if (error) {
+        console.error('Error batch creating anomalies:', error);
+        throw error;
       }
+
+      return (data || []).map(this.convertToFrontendAnomaly.bind(this));
+    } catch (error) {
+      console.error('Error in batchCreateAnomalies:', error);
+      throw error;
     }
-    
-    return results;
+  }
+
+  // Bulk update anomaly status
+  async bulkUpdateStatus(anomalyIds: string[], status: 'new' | 'in_progress' | 'treated' | 'closed'): Promise<boolean> {
+    try {
+      const supabaseStatus = this.mapStatusToSupabase(status);
+      
+      const { error } = await supabase
+        .from('anomalies')
+        .update({ status: supabaseStatus })
+        .in('id', anomalyIds);
+
+      if (error) {
+        console.error('Error bulk updating status:', error);
+        throw error;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in bulkUpdateStatus:', error);
+      throw error;
+    }
   }
 }
 

@@ -30,13 +30,13 @@ interface DataContextType {
   getActionPlanById: (id: string) => ActionPlan | undefined;
   
   // Statistics
-  getAnomalyStats: () => {
+  getAnomalyStats: () => Promise<{
     total: number;
     open: number;
     critical: number;
     assigned: number;
     unassigned: number;
-  };
+  }>;
   
   // Additional properties
   isLoading: boolean;
@@ -226,14 +226,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return actionPlans.find(plan => plan.id === id);
   };
 
-  const getAnomalyStats = () => {
-    const total = anomalies.length;
-    const open = anomalies.filter(a => a.status !== 'closed').length;
-    const critical = anomalies.filter(a => a.criticalityLevel === 'critical').length;
-    const assigned = anomalies.filter(a => a.maintenanceWindowId).length;
-    const unassigned = total - assigned;
+  const getAnomalyStats = async () => {
+    try {
+      const stats = await anomalyService.getAnomalyStats();
+      return {
+        total: stats.total,
+        open: stats.byStatus.new + stats.byStatus.in_progress + stats.byStatus.treated || 0,
+        critical: stats.byCriticality.critical || 0,
+        assigned: anomalies.filter(a => a.maintenanceWindowId).length,
+        unassigned: stats.total - anomalies.filter(a => a.maintenanceWindowId).length
+      };
+    } catch (error) {
+      console.error('Error getting anomaly stats:', error);
+      // Fallback to local calculation
+      const total = anomalies.length;
+      const open = anomalies.filter(a => a.status !== 'closed').length;
+      const critical = anomalies.filter(a => a.criticalityLevel === 'critical').length;
+      const assigned = anomalies.filter(a => a.maintenanceWindowId).length;
+      const unassigned = total - assigned;
 
-    return { total, open, critical, assigned, unassigned };
+      return { total, open, critical, assigned, unassigned };
+    }
   };
 
   const value: DataContextType = {

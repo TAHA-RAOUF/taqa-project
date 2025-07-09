@@ -18,6 +18,8 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
 import { ActionPlanModal } from '../components/anomalies/ActionPlanModal';
 import { useData } from '../contexts/DataContext';
 import { formatDateTime, getCriticalityColor, calculateCriticality } from '../lib/utils';
@@ -38,20 +40,18 @@ export const AnomalyDetail: React.FC = () => {
   const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(anomaly?.actionPlan);
   const [editingScores, setEditingScores] = useState(false);
   const [aiScores, setAiScores] = useState({
-    fiabiliteScore: anomaly?.fiabiliteScore || 0,
-    integriteScore: anomaly?.integriteScore || 0,
+    fiabiliteIntegriteScore: anomaly?.fiabiliteIntegriteScore || 0,
     disponibiliteScore: anomaly?.disponibiliteScore || 0,
     processSafetyScore: anomaly?.processSafetyScore || 0,
     criticalityLevel: anomaly?.criticalityLevel || 'low'
   });
   const [userScores, setUserScores] = useState({
-    fiabiliteScore: anomaly?.fiabiliteScore || 0,
-    integriteScore: anomaly?.integriteScore || 0,
-    disponibiliteScore: anomaly?.disponibiliteScore || 0,
-    processSafetyScore: anomaly?.processSafetyScore || 0,
-    criticalityLevel: anomaly?.criticalityLevel || 'low'
+    fiabiliteIntegriteScore: anomaly?.userFiabiliteIntegriteScore || anomaly?.fiabiliteIntegriteScore || 0,
+    disponibiliteScore: anomaly?.userDisponibiliteScore || anomaly?.disponibiliteScore || 0,
+    processSafetyScore: anomaly?.userProcessSafetyScore || anomaly?.processSafetyScore || 0,
+    criticalityLevel: anomaly?.userCriticalityLevel || anomaly?.criticalityLevel || 'low'
   });
-  const [useUserScores, setUseUserScores] = useState(false);
+  const [useUserScores, setUseUserScores] = useState(anomaly?.useUserScores || false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     status: anomaly?.status || 'new',
@@ -134,7 +134,15 @@ export const AnomalyDetail: React.FC = () => {
 
   const handleScoreChange = (field: keyof typeof userScores, value: number) => {
     const newScores = { ...userScores, [field]: value };
-    const newCriticality = calculateCriticality(newScores);
+    // Calculate new criticality based on the sum of the three scores
+    const totalScore = newScores.fiabiliteIntegriteScore + newScores.disponibiliteScore + newScores.processSafetyScore;
+    let newCriticality: 'low' | 'medium' | 'high' | 'critical' = 'low';
+    
+    if (totalScore <= 6) newCriticality = 'low';
+    else if (totalScore <= 9) newCriticality = 'medium';
+    else if (totalScore <= 12) newCriticality = 'high';
+    else newCriticality = 'critical';
+    
     setUserScores({ ...newScores, criticalityLevel: newCriticality });
   };
 
@@ -384,16 +392,15 @@ export const AnomalyDetail: React.FC = () => {
                       min="0"
                       max="5"
                       step="0.1"
-                      value={((userScores.fiabiliteScore + userScores.integriteScore) / 2).toFixed(1)}
+                      value={userScores.fiabiliteIntegriteScore.toFixed(1)}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value);
-                        handleScoreChange('fiabiliteScore', value);
-                        handleScoreChange('integriteScore', value);
+                        handleScoreChange('fiabiliteIntegriteScore', value);
                       }}
                       className="w-full text-center text-2xl font-bold text-blue-900 bg-transparent border-b-2 border-blue-300 focus:outline-none focus:border-blue-500"
                     />
                   ) : (
-                    <p className="text-2xl font-bold text-blue-900">{((currentScores.fiabiliteScore + currentScores.integriteScore) / 2).toFixed(1)}</p>
+                    <p className="text-2xl font-bold text-blue-900">{currentScores.fiabiliteIntegriteScore.toFixed(1)}</p>
                   )}
                   <div className="text-xs text-blue-600 mt-1">/5</div>
                 </div>
@@ -438,7 +445,7 @@ export const AnomalyDetail: React.FC = () => {
                   Criticité: {currentScores.criticalityLevel}
                 </Badge>
                 <div className="text-sm text-gray-500">
-                  Score moyen: {(((currentScores.fiabiliteScore + currentScores.integriteScore) / 2 + currentScores.disponibiliteScore + currentScores.processSafetyScore) / 3).toFixed(1)}/5
+                  Score moyen: {((currentScores.fiabiliteIntegriteScore + currentScores.disponibiliteScore + currentScores.processSafetyScore) / 3).toFixed(1)}/5
                 </div>
               </div>
               
@@ -478,12 +485,12 @@ export const AnomalyDetail: React.FC = () => {
                     { key: 'fiabiliteIntegrite', label: 'Fiabilité & Intégrité', color: 'blue' },
                     { key: 'disponibiliteScore', label: 'Disponibilité', color: 'orange' },
                     { key: 'processSafetyScore', label: 'Sécurité', color: 'purple' }
-                  ].map(({ key, label, color }) => {
+                  ].map(({ key, label }) => {
                     let aiValue, userValue;
                     
                     if (key === 'fiabiliteIntegrite') {
-                      aiValue = (aiScores.fiabiliteScore + aiScores.integriteScore) / 2;
-                      userValue = (userScores.fiabiliteScore + userScores.integriteScore) / 2;
+                      aiValue = aiScores.fiabiliteIntegriteScore;
+                      userValue = userScores.fiabiliteIntegriteScore;
                     } else {
                       aiValue = aiScores[key as keyof typeof aiScores] as number;
                       userValue = userScores[key as keyof typeof userScores] as number;
@@ -582,7 +589,7 @@ export const AnomalyDetail: React.FC = () => {
                   <Select
                     options={statusOptions}
                     value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as 'new' | 'in_progress' | 'treated' | 'closed' })}
                   />
                 ) : (
                   <Badge variant={getStatusVariant(anomaly.status)}>

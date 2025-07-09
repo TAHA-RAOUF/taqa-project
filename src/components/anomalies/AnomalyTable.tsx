@@ -33,6 +33,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
+  const [criticalityFilter, setCriticalityFilter] = useState('all');
   const [sortField, setSortField] = useState<keyof Anomaly>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
@@ -44,13 +45,19 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     { value: 'closed', label: 'Fermé' },
   ];
   
+  // Dynamic service options based on actual data
+  const uniqueServices = [...new Set(anomalies.map(a => a.service).filter(Boolean))];
   const serviceOptions = [
     { value: 'all', label: 'Tous les services' },
-    { value: 'Production', label: 'Production' },
-    { value: 'Maintenance', label: 'Maintenance' },
-    { value: 'Intégrité', label: 'Intégrité' },
-    { value: 'Instrumentation', label: 'Instrumentation' },
-    { value: 'Utilités', label: 'Utilités' },
+    ...uniqueServices.map(service => ({ value: service, label: service }))
+  ];
+
+  const criticalityOptions = [
+    { value: 'all', label: 'Toutes les criticités' },
+    { value: 'low', label: 'Faible' },
+    { value: 'medium', label: 'Moyenne' },
+    { value: 'high', label: 'Élevée' },
+    { value: 'critical', label: 'Critique' },
   ];
   
   const getBadgeVariant = (level: string) => {
@@ -79,8 +86,9 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                          (anomaly.responsiblePerson || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || anomaly.status === statusFilter;
     const matchesService = serviceFilter === 'all' || anomaly.service === serviceFilter;
+    const matchesCriticality = criticalityFilter === 'all' || anomaly.criticalityLevel === criticalityFilter;
     
-    return matchesSearch && matchesStatus && matchesService;
+    return matchesSearch && matchesStatus && matchesService && matchesCriticality;
   });
   
   const sortedAnomalies = [...filteredAnomalies].sort((a, b) => {
@@ -166,8 +174,32 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     <Card>
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-          <CardTitle>Gestion des Anomalies</CardTitle>
+          <div className="flex flex-col">
+            <CardTitle>Gestion des Anomalies</CardTitle>
+            <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
+              <span>{filteredAnomalies.length} anomalie{filteredAnomalies.length !== 1 ? 's' : ''} trouvée{filteredAnomalies.length !== 1 ? 's' : ''} sur {anomalies.length} au total</span>
+              {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
+                <span className="text-blue-600 font-medium">
+                  Filtres actifs
+                </span>
+              )}
+            </div>
+          </div>
           <div className="flex space-x-2">
+            {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setStatusFilter('all');
+                  setServiceFilter('all');
+                  setCriticalityFilter('all');
+                  setSearchTerm('');
+                }}
+              >
+                Réinitialiser
+              </Button>
+            )}
             <Button variant="outline" size="sm">
               <Filter className="w-4 h-4 mr-2" />
               Filtres
@@ -179,8 +211,8 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col space-y-4">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               placeholder="Rechercher par description, équipement, ou responsable..."
@@ -189,16 +221,29 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
               className="pl-10"
             />
           </div>
-          <Select
-            options={statusOptions}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          />
-          <Select
-            options={serviceOptions}
-            value={serviceFilter}
-            onChange={(e) => setServiceFilter(e.target.value)}
-          />
+          <div className="flex flex-wrap gap-2">
+            <div className="flex-1 min-w-[150px]">
+              <Select
+                options={statusOptions}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <Select
+                options={serviceOptions}
+                value={serviceFilter}
+                onChange={(e) => setServiceFilter(e.target.value)}
+              />
+            </div>
+            <div className="flex-1 min-w-[150px]">
+              <Select
+                options={criticalityOptions}
+                value={criticalityFilter}
+                onChange={(e) => setCriticalityFilter(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
       </CardHeader>
       

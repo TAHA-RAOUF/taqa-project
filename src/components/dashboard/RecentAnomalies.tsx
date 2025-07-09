@@ -36,9 +36,9 @@ export const RecentAnomalies: React.FC<RecentAnomaliesProps> = ({ anomalies }) =
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle>Anomalies Récentes</CardTitle>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/anomalies">Voir tout</Link>
-        </Button>
+        <Link to="/anomalies">
+          <Button variant="ghost" size="sm">Voir tout</Button>
+        </Link>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -50,12 +50,15 @@ export const RecentAnomalies: React.FC<RecentAnomaliesProps> = ({ anomalies }) =
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium text-gray-900 truncate">
-                    {anomaly.title}
+                    {anomaly.equipmentId || 'Équipement non spécifié'}
                   </h4>
                   <Badge variant={getBadgeVariant(anomaly.criticalityLevel)}>
                     {anomaly.criticalityLevel}
                   </Badge>
                 </div>
+                <p className="text-xs text-gray-600 mt-1 truncate">
+                  {anomaly.description || 'Aucune description'}
+                </p>
                 <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
                   <div className="flex items-center">
                     <Wrench className="w-3 h-3 mr-1" />
