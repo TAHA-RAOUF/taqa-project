@@ -68,24 +68,6 @@ export const Anomalies: React.FC = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Gestion des Anomalies</h1>
-          {/* Data source status indicator */}
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-            useBackend 
-              ? 'bg-green-100 text-green-800' 
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
-            {useBackend ? (
-              <>
-                <Database className="h-4 w-4" />
-                Supabase
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-4 w-4" />
-                Données locales
-              </>
-            )}
-          </div>
         </div>
         <Button onClick={handleCreateNew}>
           <Plus className="h-4 w-4 mr-2" />

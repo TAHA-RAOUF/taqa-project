@@ -244,10 +244,6 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                 Réinitialiser
               </Button>
             )}
-            <Button variant="outline" size="sm">
-              <Filter className="w-4 h-4 mr-2" />
-              Filtres
-            </Button>
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4 mr-2" />
               Export
