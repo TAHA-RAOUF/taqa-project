@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Anomalies } from './pages/Anomalies';
 import { AnomalyDetail } from './pages/AnomalyDetail';
 import { Planning } from './pages/Planning';
+import { PlanningNew } from './pages/PlanningNew';
 import { Archive } from './pages/Archive';
 import { Chat } from './pages/Chat';
 import { Profile } from './pages/Profile';
@@ -25,7 +26,8 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/anomalies" element={<Anomalies />} />
                 <Route path="/anomaly/:id" element={<AnomalyDetail />} />
-                <Route path="/planning" element={<Planning />} />
+                <Route path="/planning" element={<PlanningNew />} />
+                <Route path="/planning-old" element={<Planning />} />
                 <Route path="/archive" element={<Archive />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />

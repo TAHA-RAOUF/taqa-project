@@ -118,7 +118,7 @@ export class AnomalyService {
     const criticalityLevel = this.calculateCriticalityLevel(supabaseAnomaly.final_criticality_level);
     
     return {
-      id: supabaseAnomaly.id,
+      id: String(supabaseAnomaly.id), // Ensure ID is always a string
       title: supabaseAnomaly.description.substring(0, 50) + (supabaseAnomaly.description.length > 50 ? '...' : ''),
       description: supabaseAnomaly.description,
       equipmentId: supabaseAnomaly.equipement_id,

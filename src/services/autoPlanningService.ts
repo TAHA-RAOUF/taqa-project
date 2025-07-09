@@ -19,18 +19,31 @@ export class AutoPlanningService {
     const updatedWindows = [...maintenanceWindows];
     const assignmentResults: AssignmentResult[] = [];
 
+    console.log('Starting auto assignment of treated anomalies');
+
     // Find treated anomalies that are not yet assigned to any window
     const treatedAnomalies = anomalies.filter(anomaly => 
-      anomaly.status === 'treated' && 
+      anomaly.status === 'in_progress' && 
       !anomaly.maintenanceWindowId
     );
+    
+    console.log(`Found ${treatedAnomalies.length} treated unassigned anomalies`);
 
     // Find open maintenance windows (planned or in_progress)
     const openWindows = maintenanceWindows.filter(window => 
       window.status === 'planned' || window.status === 'in_progress'
     );
+    
+    console.log(`Found ${openWindows.length} open maintenance windows`);
+    
+    // Log the initial capacity of each window
+    openWindows.forEach(window => {
+      const availableHours = this.getAvailableHours(window);
+      console.log(`Window ${window.id} (${window.title || 'Untitled'}): ${availableHours} hours available`);
+    });
 
     if (treatedAnomalies.length === 0) {
+      console.log('No treated anomalies to assign');
       return {
         updatedAnomalies,
         updatedWindows,
@@ -40,6 +53,7 @@ export class AutoPlanningService {
 
     if (openWindows.length === 0) {
       // No open windows - suggest creating new ones
+      console.log('No open windows available, suggesting new ones');
       const criticalAnomalies = treatedAnomalies.filter(a => a.criticalityLevel === 'critical');
       if (criticalAnomalies.length > 0) {
         toast.error(`${criticalAnomalies.length} anomalies critiques traitées nécessitent un arrêt forcé`);
@@ -59,12 +73,22 @@ export class AutoPlanningService {
 
     // Sort anomalies by priority (critical first)
     const sortedAnomalies = this.sortAnomaliesByPriority(treatedAnomalies);
+    console.log(`Sorted ${sortedAnomalies.length} anomalies by priority`);
 
+    // Create a working copy of open windows that we'll update as we assign anomalies
+    let workingWindows = [...openWindows];
+    
     // Assign anomalies to windows
     for (const anomaly of sortedAnomalies) {
-      const bestWindow = this.findBestWindow(anomaly, openWindows, actionPlans);
+      console.log(`Processing anomaly ${anomaly.id} (${anomaly.description})`);
+      console.log(`Status: ${anomaly.status}, Criticality: ${anomaly.criticalityLevel}, Estimated Hours: ${anomaly.estimatedHours || 'unknown'}`);
+      
+      // Find the best window from our working copy (which has updated capacities)
+      const bestWindow = this.findBestWindow(anomaly, workingWindows, actionPlans);
       
       if (bestWindow) {
+        console.log(`Found best window: ${bestWindow.id} (${bestWindow.description || 'No description'})`);
+        
         // Assign anomaly to window
         const anomalyIndex = updatedAnomalies.findIndex(a => a.id === anomaly.id);
         const windowIndex = updatedWindows.findIndex(w => w.id === bestWindow.id);
@@ -76,12 +100,26 @@ export class AutoPlanningService {
             maintenanceWindowId: bestWindow.id
           };
 
-          // Update window
+          // Update window in our main result
           const currentAssigned = updatedWindows[windowIndex].assignedAnomalies || [];
           updatedWindows[windowIndex] = {
             ...updatedWindows[windowIndex],
             assignedAnomalies: [...currentAssigned, updatedAnomalies[anomalyIndex]]
           };
+          
+          // Update our working copy of windows
+          const workingWindowIndex = workingWindows.findIndex(w => w.id === bestWindow.id);
+          if (workingWindowIndex !== -1) {
+            const workingCurrentAssigned = workingWindows[workingWindowIndex].assignedAnomalies || [];
+            workingWindows[workingWindowIndex] = {
+              ...workingWindows[workingWindowIndex],
+              assignedAnomalies: [...workingCurrentAssigned, updatedAnomalies[anomalyIndex]]
+            };
+          }
+          
+          // Log the remaining capacity after assignment
+          const remainingHours = this.getAvailableHours(workingWindows[workingWindowIndex]);
+          console.log(`Assigned to window ${bestWindow.id}. Remaining capacity: ${remainingHours} hours`);
 
           assignmentResults.push({
             anomalyId: anomaly.id,
@@ -91,6 +129,7 @@ export class AutoPlanningService {
           });
         }
       } else {
+        console.log(`No suitable window found for anomaly ${anomaly.id}`);
         assignmentResults.push({
           anomalyId: anomaly.id,
           windowId: null,
@@ -99,6 +138,10 @@ export class AutoPlanningService {
         });
       }
     }
+    
+    // Log assignment results
+    console.log(`Assignment complete. ${assignmentResults.filter(r => r.success).length} anomalies assigned.`);
+    console.log(`${assignmentResults.filter(r => !r.success).length} anomalies could not be assigned.`);
 
     return {
       updatedAnomalies,
@@ -109,25 +152,40 @@ export class AutoPlanningService {
 
   /**
    * Find the best maintenance window for an anomaly
+   * Improved to consider actual hours required for the anomaly
    */
   private static findBestWindow(
     anomaly: Anomaly,
     openWindows: MaintenanceWindow[],
     actionPlans: ActionPlan[]
   ): MaintenanceWindow | null {
+    // Get the action plan for this anomaly to determine actual required hours
     const actionPlan = actionPlans.find(ap => ap.anomalyId === anomaly.id);
-    const requiredDuration = actionPlan?.outageDuration || 1;
+    
+    // Use estimated hours from anomaly or action plan
+    const requiredHours = anomaly.estimatedHours || 
+                         (actionPlan?.totalDurationHours) || 
+                         (actionPlan?.outageDuration ? actionPlan.outageDuration / 60 : 1);
+                         
+    console.log(`Finding window for anomaly ${anomaly.id} requiring ${requiredHours} hours`);
 
-    // Filter compatible windows
-    const compatibleWindows = openWindows.filter(window => 
-      this.isCompatible(anomaly, window, requiredDuration)
-    );
+    // Filter windows that have enough capacity for this anomaly
+    const compatibleWindows = openWindows.filter(window => {
+      const isTypeCompatible = this.isTypeCompatible(anomaly.criticalityLevel, window.type);
+      const availableHours = this.getAvailableHours(window);
+      const hasEnoughCapacity = availableHours >= requiredHours;
+      
+      console.log(`Window ${window.id}: Type compatible: ${isTypeCompatible}, Available hours: ${availableHours}, Required: ${requiredHours}`);
+      
+      return isTypeCompatible && hasEnoughCapacity;
+    });
 
     if (compatibleWindows.length === 0) {
+      console.log(`No compatible windows found for anomaly ${anomaly.id}`);
       return null;
     }
 
-    // Sort by preference: exact match type > earlier date > more capacity
+    // Sort by preference: exact match type > earlier date > best fit for hours
     return compatibleWindows.sort((a, b) => {
       // Prefer exact compatibility match
       const aExactMatch = this.isExactMatch(anomaly, a);
@@ -136,19 +194,23 @@ export class AutoPlanningService {
       if (aExactMatch && !bExactMatch) return -1;
       if (!aExactMatch && bExactMatch) return 1;
 
-      // Prefer earlier dates
+      // Prefer windows where this anomaly will fit best (best fit algorithm)
+      // This prevents small jobs from taking large windows unnecessarily
+      const aAvailableHours = this.getAvailableHours(a);
+      const bAvailableHours = this.getAvailableHours(b);
+      const aDifference = aAvailableHours - requiredHours;
+      const bDifference = bAvailableHours - requiredHours;
+      
+      // Choose the window with the smallest non-negative difference (best fit)
+      if (aDifference >= 0 && bDifference >= 0) {
+        return aDifference - bDifference; // Smaller difference is better
+      }
+      
+      // Prefer earlier dates if best fit is equivalent
       const aDate = new Date(a.startDate).getTime();
       const bDate = new Date(b.startDate).getTime();
       
-      if (aDate !== bDate) {
-        return aDate - bDate;
-      }
-
-      // Prefer windows with more available capacity
-      const aCapacity = this.getAvailableCapacity(a);
-      const bCapacity = this.getAvailableCapacity(b);
-      
-      return bCapacity - aCapacity;
+      return aDate - bDate;
     })[0];
   }
 
@@ -210,6 +272,27 @@ export class AutoPlanningService {
     }, 0);
     
     return Math.max(0, window.durationDays - usedCapacity);
+  }
+
+  /**
+   * Get available hours for a maintenance window
+   * This calculates the remaining hours available in a window after
+   * considering all anomalies already assigned to it
+   */
+  private static getAvailableHours(window: MaintenanceWindow): number {
+    const assigned = window.assignedAnomalies || [];
+    const totalWindowHours = window.durationDays * 24; // Convert days to hours
+    
+    // Calculate used hours based on estimated hours of assigned anomalies
+    const usedHours = assigned.reduce((sum, anomaly) => {
+      return sum + (anomaly.estimatedHours || 8); // Default to 8 hours if not specified
+    }, 0);
+    
+    // Account for buffer time between anomalies (2 hours buffer per anomaly)
+    const bufferHours = assigned.length > 0 ? (assigned.length * 2) : 0;
+    
+    // Calculate available hours
+    return Math.max(0, totalWindowHours - usedHours - bufferHours);
   }
 
   /**

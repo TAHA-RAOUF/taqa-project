@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Anomaly, MaintenanceWindow, ActionPlan } from '../types';
 import { mockMaintenanceWindows } from '../data/mockData';
 import { anomalyService } from '../services/anomalyService';
+import { maintenanceWindowService } from '../services/maintenanceWindowService';
 import { loggingService } from '../services/loggingService';
 import { supabaseActionPlanService, CreateActionPlanData, UpdateActionPlanData } from '../services/supabaseActionPlanService';
 import { generateId } from '../lib/utils';
@@ -80,7 +81,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         
         setAnomalies(anomaliesResponse);
-        setMaintenanceWindows(mockMaintenanceWindows); // Use mock data for now
+        
+        // Load maintenance windows from backend
+        let windowsResponse: MaintenanceWindow[] = [];
+        try {
+          windowsResponse = await maintenanceWindowService.getMaintenanceWindows();
+          setMaintenanceWindows(windowsResponse);
+        } catch (windowError) {
+          console.warn('Failed to load maintenance windows from backend, using mock data:', windowError);
+          setMaintenanceWindows(mockMaintenanceWindows);
+        }
         
         // Load action plans from Supabase
         const actionPlansResponse = await supabaseActionPlanService.getAllActionPlans();
@@ -99,7 +109,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             description: `Successfully loaded ${anomaliesResponse.length} anomalies from Supabase`,
             additionalInfo: {
               anomaliesCount: anomaliesResponse.length,
-              maintenanceWindowsCount: mockMaintenanceWindows.length
+              maintenanceWindowsCount: windowsResponse.length
             }
           },
           severity: 'success',
@@ -275,32 +285,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Maintenance Window functions
+  // Maintenance Window functions - Updated to use backend service
   const addMaintenanceWindow = async (windowData: Omit<MaintenanceWindow, 'id'>) => {
-    // For now, just use local creation until maintenance service is updated
-    const newWindow: MaintenanceWindow = {
-      ...windowData,
-      id: generateId()
-    };
-    setMaintenanceWindows(prev => [...prev, newWindow]);
+    try {
+      if (useBackend) {
+        const newWindow = await maintenanceWindowService.createMaintenanceWindow(windowData);
+        setMaintenanceWindows(prev => [...prev, newWindow]);
+        toast.success('Maintenance window created successfully');
+      } else {
+        // Fallback to local creation
+        const newWindow: MaintenanceWindow = {
+          ...windowData,
+          id: generateId()
+        };
+        setMaintenanceWindows(prev => [...prev, newWindow]);
+      }
+    } catch (error) {
+      console.error('Failed to create maintenance window:', error);
+      toast.error('Failed to create maintenance window');
+    }
   };
 
   const updateMaintenanceWindow = async (id: string, updates: Partial<MaintenanceWindow>) => {
-    // For now, just use local update until maintenance service is updated
-    setMaintenanceWindows(prev => prev.map(window => 
-      window.id === id ? { ...window, ...updates } : window
-    ));
+    try {
+      if (useBackend) {
+        const updatedWindow = await maintenanceWindowService.updateMaintenanceWindow(id, updates);
+        setMaintenanceWindows(prev => prev.map(window => 
+          window.id === id ? updatedWindow : window
+        ));
+        toast.success('Maintenance window updated successfully');
+      } else {
+        // Fallback to local update
+        setMaintenanceWindows(prev => prev.map(window => 
+          window.id === id ? { ...window, ...updates } : window
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to update maintenance window:', error);
+      toast.error('Failed to update maintenance window');
+    }
   };
 
   const deleteMaintenanceWindow = async (id: string) => {
-    // Update local state
-    setMaintenanceWindows(prev => prev.filter(window => window.id !== id));
-    // Remove window assignment from anomalies
-    setAnomalies(prev => prev.map(anomaly => 
-      anomaly.maintenanceWindowId === id 
-        ? { ...anomaly, maintenanceWindowId: undefined }
-        : anomaly
-    ));
+    try {
+      if (useBackend) {
+        await maintenanceWindowService.deleteMaintenanceWindow(id);
+        setMaintenanceWindows(prev => prev.filter(window => window.id !== id));
+        // Update anomalies to remove window assignment
+        setAnomalies(prev => prev.map(anomaly => 
+          anomaly.maintenanceWindowId === id 
+            ? { ...anomaly, maintenanceWindowId: undefined }
+            : anomaly
+        ));
+        toast.success('Maintenance window deleted successfully');
+      } else {
+        // Fallback to local deletion
+        setMaintenanceWindows(prev => prev.filter(window => window.id !== id));
+        setAnomalies(prev => prev.map(anomaly => 
+          anomaly.maintenanceWindowId === id 
+            ? { ...anomaly, maintenanceWindowId: undefined }
+            : anomaly
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to delete maintenance window:', error);
+      toast.error('Failed to delete maintenance window');
+    }
   };
 
   // Action Plan functions with better error handling
