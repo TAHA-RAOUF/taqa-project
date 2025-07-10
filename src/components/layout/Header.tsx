@@ -87,10 +87,14 @@ export const Header: React.FC = () => {
                   <span className="hidden md:inline text-sm">{user?.name}</span>
                 </Button>
               </Link>
-              
-              <Button variant="ghost" size="sm" className="hover:bg-gray-50">
+              <Link to="/settings">
+                <Button variant="ghost" size="sm" className="hover:bg-gray-50">
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </Link>
+              {/* <Button variant="ghost" size="sm" className="hover:bg-gray-50">
                 <Settings className="w-4 h-4" />
-              </Button>
+              </Button> */}
               
               <Button variant="ghost" size="sm" onClick={logout} className="hover:bg-red-50 hover:text-red-600">
                 <LogOut className="w-4 h-4" />

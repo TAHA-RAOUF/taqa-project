@@ -14,6 +14,7 @@ import { Archive } from './pages/Archive';
 import { Chat } from './pages/Chat';
 import { Profile } from './pages/Profile';
 import LogsPage from './pages/Logs';
+import { Settings } from './pages/Settings';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/logs" element={<LogsPage />} />
+                <Route path="/settings" element={<Settings />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

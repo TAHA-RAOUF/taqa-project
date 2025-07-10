@@ -124,55 +124,8 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
         </Button>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[
-          {
-            label: 'Total Windows',
-            value: windows.length,
-            icon: Calendar,
-            color: 'bg-blue-500'
-          },
-          {
-            label: 'Planned',
-            value: windows.filter(w => w.status === 'planned').length,
-            icon: Clock,
-            color: 'bg-orange-500'
-          },
-          {
-            label: 'In Progress',
-            value: windows.filter(w => w.status === 'in_progress').length,
-            icon: Settings,
-            color: 'bg-green-500'
-          },
-          {
-            label: 'Available Capacity',
-            value: `${windows.filter(w => w.status === 'planned').length}`,
-            icon: Target,
-            color: 'bg-purple-500'
-          }
-        ].map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.color} rounded-full p-3`}>
-                    <Icon className="h-5 w-5 text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
       {/* Windows Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 py-6 px-2 md:px-6">
         {sortedWindows.map((window, index) => {
           const stats = getWindowStats(window);
           const isSelected = selectedWindow === window.id;
