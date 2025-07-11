@@ -6,7 +6,8 @@ import {
   Cpu,
   Target,
   TrendingUp,
-  Zap
+  Zap,
+  Plus
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { 
@@ -365,46 +366,69 @@ export const PlanningNew: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/20 flex flex-col items-center">
-      {/* Small French Header */}
+      {/* Enhanced Header with Action Button */}
       <div className="mb-8 relative w-full flex justify-center">
         <div className="absolute inset-0 bg-white/70 backdrop-blur-sm border-b border-gray-200/50" />
-        <div className="relative px-6 py-4 max-w-5xl w-full">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
-              <Calendar className="h-6 w-6 text-white" />
+        <div className="relative px-6 py-4 max-w-7xl w-full">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg">
+                <Calendar className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Planification intelligente</h1>
+                <p className="text-gray-500 text-sm">Optimisez la maintenance grâce à l'IA</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Planification intelligente</h1>
-              <p className="text-gray-500 text-sm">Optimisez la maintenance grâce à l'IA</p>
-            </div>
+            
+            {/* Create Window Button - Moved to header */}
+            <Button 
+              onClick={() => handleCreateWindow()} 
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 transform transition-all duration-200 hover:scale-105 shadow-md"
+            >
+              <Plus className="h-4 w-4" />
+              Nouvelle fenêtre
+            </Button>
           </div>
         </div>
       </div>
       {/* Main Content - Centered and matching header width */}
       <div className="w-full flex justify-center">
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden max-w-5xl w-full px-6 py-8">
-          {/* Navigation Buttons - now at the top left of the subpage, no algorithm */}
-          <div className="flex items-center gap-2 mb-8">
-            {[
-              { id: 'overview', label: "Vue d'ensemble", icon: BarChart3, color: 'blue' },
-              { id: 'windows', label: 'Fenêtres', icon: Calendar, color: 'indigo' },
-              { id: 'analytics', label: 'Analytiques', icon: Eye, color: 'purple' }
-            ].map(tab => (
-              <Button
-                key={tab.id}
-                variant={activeView === tab.id ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => setActiveView(tab.id as any)}
-                className={`flex items-center gap-2 transition-all duration-300 ${
-                  activeView === tab.id 
-                    ? `bg-gradient-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-lg transform scale-105` 
-                    : 'hover:bg-gray-100/80 text-gray-700'
-                }`}
-              >
-                <tab.icon className="h-4 w-4" />
-                {tab.label}
-              </Button>
-            ))}
+        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-gray-200/50 overflow-hidden w-full px-6 py-8 max-w-7xl">
+          {/* Navigation Buttons with Auto Schedule Indicator */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+              {[
+                { id: 'overview', label: "Vue d'ensemble", icon: BarChart3, color: 'blue' },
+                { id: 'windows', label: 'Calendrier', icon: Calendar, color: 'indigo' },
+                { id: 'analytics', label: 'Analytiques', icon: Eye, color: 'purple' }
+              ].map(tab => (
+                <Button
+                  key={tab.id}
+                  variant={activeView === tab.id ? 'primary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveView(tab.id as any)}
+                  className={`flex items-center gap-2 transition-all duration-300 ${
+                    activeView === tab.id 
+                      ? `bg-gradient-to-r from-${tab.color}-600 to-${tab.color}-700 text-white shadow-lg transform scale-105` 
+                      : 'hover:bg-gray-100/80 text-gray-700'
+                  }`}
+                >
+                  <tab.icon className="h-4 w-4" />
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+            
+            {/* Auto Schedule Status Badge */}
+            <div className="flex items-center gap-2">
+              <div className={`h-2.5 w-2.5 rounded-full ${autoScheduleEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
+              <span className="text-sm text-gray-600">
+                Planification auto: <span className={autoScheduleEnabled ? 'text-green-600 font-medium' : 'text-gray-500'}>
+                  {autoScheduleEnabled ? 'Activée' : 'Désactivée'}
+                </span>
+              </span>
+            </div>
           </div>
 
           {activeView === 'overview' && (
@@ -441,10 +465,10 @@ export const PlanningNew: React.FC = () => {
         </div>
       </div>
 
-      {/* Enhanced Auto Scheduler Component */}
+      {/* Enhanced Auto Scheduler Component - More integrated design */}
       {autoScheduleEnabled && (
-        <div className="px-6 mt-8">
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 overflow-hidden">
+        <div className="px-6 mt-4 max-w-7xl w-full">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-md border border-gray-200/50 overflow-hidden">
             <AutoScheduler
               treatedAnomalies={unscheduledTreatedAnomalies}
               onScheduleComplete={handleAutoSchedule}

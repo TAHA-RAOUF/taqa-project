@@ -3,7 +3,6 @@ import { X, Plus, Trash2, Clock, Wrench, AlertTriangle, Save, Calendar, CheckCir
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import { Card, CardContent } from '../ui/Card';
 import { Anomaly, ActionPlan, ActionItem } from '../../types';
 import { calculateActionPlanProgress } from '../../lib/planningUtils';
 import toast from 'react-hot-toast';
@@ -43,7 +42,6 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 			completionPercentage: 0
 		}
 	);
-	const [isLoading, setIsLoading] = useState(false);
 	const [isSaving, setIsSaving] = useState(false);
 	const [locallyAddedActions, setLocallyAddedActions] = useState<string[]>([]);
 	const [locallyRemovedActions, setLocallyRemovedActions] = useState<string[]>([]);
@@ -315,345 +313,476 @@ export const ActionPlanModal: React.FC<ActionPlanModalProps> = ({
 	if (!isOpen) return null;
 
 	return (
-		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-			<div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-				<div className="flex items-center justify-between p-6 border-b border-gray-200">
-					<div className="flex items-center space-x-3">
-						<Wrench className="w-6 h-6 text-blue-600" />
+		<div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+			<div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col border border-gray-200">
+				{/* Header */}
+				<div className="flex items-center justify-between p-8 border-b border-gray-100 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+					<div className="flex items-center space-x-4">
+						<div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+							<Wrench className="w-8 h-8 text-white" />
+						</div>
 						<div>
-							<h2 className="text-xl font-bold text-gray-900">Plan d'Action</h2>
-							<p className="text-sm text-gray-600">{anomaly.title}</p>
+							<h2 className="text-3xl font-bold text-gray-900 tracking-tight">Plan d'Action</h2>
+							<p className="text-sm text-gray-600 mt-1 font-medium">
+								Anomalie #{anomaly.id.substring(0, 8)} • {anomaly.equipmentId}
+							</p>
 						</div>
 					</div>
-					<Button variant="ghost" size="sm" onClick={onClose}>
-						<X className="w-5 h-5" />
-					</Button>
+					<div className="flex items-center space-x-4">
+						{actionPlan.actions.length > 0 && (
+							<div className="flex items-center space-x-2 bg-white/80 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm">
+								<div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+								<span className="text-sm font-semibold text-gray-700">{actionPlan.completionPercentage}% terminé</span>
+							</div>
+						)}
+						<Button variant="ghost" size="sm" onClick={onClose} className="text-gray-500 hover:text-gray-700 hover:bg-white/80 rounded-full p-2">
+							<X className="w-6 h-6" />
+						</Button>
+					</div>
 				</div>
 
-				<div className="p-6 space-y-6">
-					{/* Besoin d'Arrêt */}
-					<Card>
-						<CardContent className="p-6">
-							<h3 className="text-lg font-semibold text-gray-900 mb-4">Planification d'Arrêt</h3>
-
-							<div className="space-y-4">
-								<div className="flex items-center space-x-4">
-									<label className="flex items-center space-x-2">
-										<input
-											type="checkbox"
-											checked={actionPlan.needsOutage}
-											onChange={(e) => setActionPlan(prev => ({ ...prev, needsOutage: e.target.checked }))}
-											className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-										/>
-										<span className="text-sm font-medium text-gray-700">Nécessite un arrêt de production</span>
-									</label>
+				{/* Content */}
+				<div className="flex-1 overflow-y-auto">
+					<div className="p-8 space-y-8">
+						{/* Planning Section */}
+						<div className="bg-gradient-to-br from-white to-blue-50/30 border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+							<div className="p-8">
+								<div className="flex items-center space-x-4 mb-6">
+									<div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+										<Calendar className="w-6 h-6 text-white" />
+									</div>
+									<div>
+										<h3 className="text-xl font-bold text-gray-900">Planification d'Arrêt</h3>
+										<p className="text-sm text-gray-600">Configuration de l'arrêt de production nécessaire</p>
+									</div>
 								</div>
 
-								{actionPlan.needsOutage && (
-									<div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
-										<div>
-											<label className="block text-sm font-medium text-gray-700 mb-2">Type d'Arrêt</label>
-											<Select
-												options={outageTypeOptions}
-												value={actionPlan.outageType || ''}
-												onChange={(e) => setActionPlan(prev => ({ ...prev, outageType: e.target.value as any }))}
-											/>
-										</div>
+								<div className="space-y-6">
+									<div className="flex items-center space-x-4">
+										<label className="flex items-center space-x-4 cursor-pointer group">
+											<div className="relative">
+												<input
+													type="checkbox"
+													checked={actionPlan.needsOutage}
+													onChange={(e) => setActionPlan(prev => ({ ...prev, needsOutage: e.target.checked }))}
+													className="sr-only"
+												/>
+												<div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all duration-200 ${
+													actionPlan.needsOutage 
+														? 'bg-blue-600 border-blue-600 shadow-md' 
+														: 'border-gray-300 group-hover:border-blue-400 group-hover:bg-blue-50'
+												}`}>
+													{actionPlan.needsOutage && (
+														<CheckCircle className="w-4 h-4 text-white" />
+													)}
+												</div>
+											</div>
+											<span className="text-base font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
+												Nécessite un arrêt de production
+											</span>
+										</label>
+									</div>
 
-										<div>
-											<label className="block text-sm font-medium text-gray-700 mb-2">Durée Estimée (jours)</label>
-											<Input
-												type="number"
-												min="1"
-												max={actionPlan.outageType === 'force' ? '3' : actionPlan.outageType === 'minor' ? '7' : '42'}
-												value={actionPlan.outageDuration || ''}
-												onChange={(e) => setActionPlan(prev => ({ ...prev, outageDuration: parseInt(e.target.value) }))}
-											/>
-											{actionPlan.outageType && (
-												<p className="text-xs text-gray-500 mt-1">
-													Plage recommandée: {getOutageDurationRange(actionPlan.outageType)}
-												</p>
-											)}
-										</div>
+									{actionPlan.needsOutage && (
+										<div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-2xl p-8 space-y-6 shadow-inner">
+											<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+												<div>
+													<label className="block text-sm font-semibold text-gray-800 mb-3">
+														Type d'Arrêt
+													</label>
+													<Select
+														options={outageTypeOptions}
+														value={actionPlan.outageType || ''}
+														onChange={(e) => setActionPlan(prev => ({ ...prev, outageType: e.target.value as any }))}
+														className="w-full"
+													/>
+												</div>
 
+												<div>
+													<label className="block text-sm font-semibold text-gray-800 mb-3">
+														Durée Estimée (jours)
+													</label>
+													<Input
+														type="number"
+														min="1"
+														max={actionPlan.outageType === 'force' ? '3' : actionPlan.outageType === 'minor' ? '7' : '42'}
+														value={actionPlan.outageDuration || ''}
+														onChange={(e) => setActionPlan(prev => ({ ...prev, outageDuration: parseInt(e.target.value) }))}
+														className="w-full"
+													/>
+													{actionPlan.outageType && (
+														<p className="text-xs text-blue-700 mt-2 font-semibold bg-blue-100 rounded-full px-3 py-1 inline-block">
+															Plage: {getOutageDurationRange(actionPlan.outageType)}
+														</p>
+													)}
+												</div>
+
+												<div>
+													<label className="block text-sm font-semibold text-gray-800 mb-3">
+														Date Planifiée
+													</label>
+													<Input
+														type="date"
+														value={actionPlan.plannedDate ? actionPlan.plannedDate.toISOString().slice(0, 10) : ''}
+														onChange={(e) => setActionPlan(prev => ({
+															...prev,
+															plannedDate: e.target.value ? new Date(e.target.value) : undefined
+														}))}
+														className="w-full"
+													/>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						</div>
+
+						{/* Actions Section */}
+						<div className="bg-gradient-to-br from-white to-green-50/30 border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+							<div className="p-8">
+								<div className="flex items-center justify-between mb-8">
+									<div className="flex items-center space-x-4">
+										<div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center shadow-md">
+											<CheckCircle className="w-6 h-6 text-white" />
+										</div>
 										<div>
-											<label className="block text-sm font-medium text-gray-700 mb-2">Date Planifiée</label>
-											<Input
-												type="date"
-												value={actionPlan.plannedDate ? actionPlan.plannedDate.toISOString().slice(0, 10) : ''}
-												onChange={(e) => setActionPlan(prev => ({
-													...prev,
-													plannedDate: e.target.value ? new Date(e.target.value) : undefined
-												}))}
-											/>
+											<h3 className="text-xl font-bold text-gray-900">Actions à Réaliser</h3>
+											<p className="text-sm text-gray-600">
+												{actionPlan.actions.length} action{actionPlan.actions.length !== 1 ? 's' : ''} définie{actionPlan.actions.length !== 1 ? 's' : ''}
+											</p>
+										</div>
+									</div>
+									
+									{actionPlan.actions.length > 0 && (
+										<div className="flex items-center space-x-2">
+											<div className="bg-blue-100 text-blue-800 px-3 py-2 rounded-full text-sm font-semibold">
+												{actionPlan.actions.filter(a => a.statut === 'planifie').length} Planifiées
+											</div>
+											<div className="bg-yellow-100 text-yellow-800 px-3 py-2 rounded-full text-sm font-semibold">
+												{actionPlan.actions.filter(a => a.statut === 'en_cours').length} En cours
+											</div>
+											<div className="bg-green-100 text-green-800 px-3 py-2 rounded-full text-sm font-semibold">
+												{actionPlan.actions.filter(a => a.statut === 'termine').length} Terminées
+											</div>
+										</div>
+									)}
+								</div>
+
+								{/* Actions List */}
+								{actionPlan.actions.length > 0 && (
+									<div className="mb-8 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+										<div className="overflow-x-auto">
+											<table className="min-w-full divide-y divide-gray-200">
+												<thead className="bg-gray-50">
+													<tr>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Action
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Responsable
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Ressources Int.
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Ressources Ext.
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Durée
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Statut
+														</th>
+														<th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+															Actions
+														</th>
+													</tr>
+												</thead>
+												<tbody className="bg-white divide-y divide-gray-200">
+													{actionPlan.actions.map((action) => (
+														<tr key={action.id} className="hover:bg-gray-50 transition-colors">
+															<td className="px-6 py-4">
+																<input
+																	type="text"
+																	value={action.action}
+																	onChange={(e) => updateAction(action.id, 'action', e.target.value)}
+																	className="w-full text-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg px-3 py-2"
+																	placeholder="Description de l'action"
+																/>
+															</td>
+															<td className="px-6 py-4">
+																<select
+																	value={action.responsable}
+																	onChange={(e) => updateAction(action.id, 'responsable', e.target.value)}
+																	className="text-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg px-3 py-2 w-full"
+																>
+																	{responsableOptions.map(opt => (
+																		<option key={opt.value} value={opt.value}>{opt.value}</option>
+																	))}
+																</select>
+															</td>
+															<td className="px-6 py-4">
+																<input
+																	type="text"
+																	value={action.ressourcesInternes}
+																	onChange={(e) => updateAction(action.id, 'ressourcesInternes', e.target.value)}
+																	className="w-full text-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg px-3 py-2"
+																	placeholder="Ex: 1 mécanicien"
+																/>
+															</td>
+															<td className="px-6 py-4">
+																<input
+																	type="text"
+																	value={action.ressourcesExternes}
+																	onChange={(e) => updateAction(action.id, 'ressourcesExternes', e.target.value)}
+																	className="w-full text-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg px-3 py-2"
+																	placeholder="Ex: 1 chaudronnier"
+																/>
+															</td>
+															<td className="px-6 py-4">
+																<div className="flex space-x-2">
+																	<input
+																		type="number"
+																		min="0"
+																		value={action.dureeJours}
+																		onChange={(e) => updateAction(action.id, 'dureeJours', parseInt(e.target.value) || 0)}
+																		className="w-16 text-xs border border-gray-300 rounded-lg px-2 py-1 text-center"
+																		placeholder="J"
+																	/>
+																	<input
+																		type="number"
+																		min="0"
+																		max="23"
+																		value={action.dureeHeures}
+																		onChange={(e) => updateAction(action.id, 'dureeHeures', parseInt(e.target.value) || 0)}
+																		className="w-16 text-xs border border-gray-300 rounded-lg px-2 py-1 text-center"
+																		placeholder="H"
+																	/>
+																</div>
+															</td>
+															<td className="px-6 py-4">
+																<select
+																	value={action.statut}
+																	onChange={(e) => updateAction(action.id, 'statut', e.target.value)}
+																	className="text-sm border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 rounded-lg px-3 py-2 w-full"
+																>
+																	{statutOptions.map(opt => (
+																		<option key={opt.value} value={opt.value}>{opt.label}</option>
+																	))}
+																</select>
+															</td>
+															<td className="px-6 py-4">
+																<Button
+																	variant="ghost"
+																	size="sm"
+																	onClick={() => removeAction(action.id)}
+																	className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full p-2"
+																>
+																	<Trash2 className="w-4 h-4" />
+																</Button>
+															</td>
+														</tr>
+													))}
+												</tbody>
+											</table>
 										</div>
 									</div>
 								)}
-							</div>
-						</CardContent>
-					</Card>
 
-					{/* Actions */}
-					<Card>
-						<CardContent className="p-6">
-							<h3 className="text-lg font-semibold text-gray-900 mb-4">Actions à Réaliser</h3>
-
-							{/* Tableau des actions existantes */}
-							{actionPlan.actions.length > 0 && (
-								<div className="mb-6 overflow-x-auto">
-									<table className="min-w-full divide-y divide-gray-200">
-										<thead className="bg-gray-50">
-											<tr>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsable</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ressources Int.</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ressources Ext.</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-												<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-											</tr>
-										</thead>
-										<tbody className="bg-white divide-y divide-gray-200">
-											{actionPlan.actions.map((action) => (
-												<tr key={action.id} className="hover:bg-gray-50">
-													<td className="px-4 py-3">
-														<div>
-															<input
-																type="text"
-																value={action.action}
-																onChange={(e) => updateAction(action.id, 'action', e.target.value)}
-																className="w-full text-sm border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
-															/>
-														</div>
-													</td>
-													<td className="px-4 py-3">
-														<select
-															value={action.responsable}
-															onChange={(e) => updateAction(action.id, 'responsable', e.target.value)}
-															className="text-sm border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
-														>
-															{responsableOptions.map(opt => (
-																<option key={opt.value} value={opt.value}>{opt.value}</option>
-															))}
-														</select>
-													</td>
-													<td className="px-4 py-3">
-														<input
-															type="text"
-															value={action.ressourcesInternes}
-															onChange={(e) => updateAction(action.id, 'ressourcesInternes', e.target.value)}
-															className="w-full text-sm border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
-															placeholder="Ex: 1 mécanicien"
-														/>
-													</td>
-													<td className="px-4 py-3">
-														<input
-															type="text"
-															value={action.ressourcesExternes}
-															onChange={(e) => updateAction(action.id, 'ressourcesExternes', e.target.value)}
-															className="w-full text-sm border-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500 rounded px-2 py-1"
-															placeholder="Ex: 1 chaudronnier"
-														/>
-													</td>
-													<td className="px-4 py-3">
-														<div>
-															<select
-																value={action.statut}
-																onChange={(e) => updateAction(action.id, 'statut', e.target.value)}
-																className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-															>
-																{statutOptions.map(opt => (
-																	<option key={opt.value} value={opt.value}>{opt.label}</option>
-																))}
-															</select>
-														</div>
-													</td>
-													<td className="px-4 py-3">
-														<div className="flex space-x-1">
-															<input
-																type="number"
-																min="0"
-																value={action.dureeJours}
-																onChange={(e) => updateAction(action.id, 'dureeJours', parseInt(e.target.value) || 0)}
-																className="w-12 text-xs border border-gray-300 rounded px-1 py-1"
-																placeholder="J"
-															/>
-															<input
-																type="number"
-																min="0"
-																max="23"
-																value={action.dureeHeures}
-																onChange={(e) => updateAction(action.id, 'dureeHeures', parseInt(e.target.value) || 0)}
-																className="w-12 text-xs border border-gray-300 rounded px-1 py-1"
-																placeholder="H"
-															/>
-														</div>
-													</td>
-													<td className="px-4 py-3">
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={() => removeAction(action.id)}
-															className="text-red-600 hover:text-red-800"
-														>
-															<Trash2 className="w-4 h-4" />
-														</Button>
-													</td>
-												</tr>
-											))}
-										</tbody>
-									</table>
-								</div>
-							)}
-
-							{/* Formulaire nouvelle action */}
-							<div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-								<h4 className="text-sm font-medium text-gray-900 mb-3">Ajouter une nouvelle action</h4>
-								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-									<div className="lg:col-span-2">
-										<Input
-											placeholder="Description de l'action"
-											value={newAction.action || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, action: e.target.value }))}
-										/>
+								{/* Add New Action */}
+								<div className="bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-8 hover:border-blue-400 transition-colors">
+									<div className="flex items-center space-x-4 mb-6">
+										<div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-md">
+											<Plus className="w-5 h-5 text-white" />
+										</div>
+										<h4 className="text-lg font-bold text-gray-900">Ajouter une nouvelle action</h4>
 									</div>
-									<div>
-										<Select
-											options={responsableOptions}
-											value={newAction.responsable || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, responsable: e.target.value }))}
-										/>
-									</div>
-									<div>
-										<Input
-											placeholder="Ressources internes"
-											value={newAction.ressourcesInternes || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, ressourcesInternes: e.target.value }))}
-										/>
-									</div>
-									<div>
-										<Input
-											placeholder="Ressources externes"
-											value={newAction.ressourcesExternes || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, ressourcesExternes: e.target.value }))}
-										/>
-									</div>
-									<div className="flex space-x-2">
-										<Input
-											type="number"
-											min="0"
-											placeholder="Jours"
-											value={newAction.dureeJours || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, dureeJours: parseInt(e.target.value) || 0 }))}
-										/>
-										<Input
-											type="number"
-											min="0"
-											max="23"
-											placeholder="Heures"
-											value={newAction.dureeHeures || ''}
-											onChange={(e) => setNewAction(prev => ({ ...prev, dureeHeures: parseInt(e.target.value) || 0 }))}
-										/>
-									</div>
-									<div>
-										<Button onClick={addAction} disabled={!newAction.action || !newAction.responsable}>
-											<Plus className="w-4 h-4 mr-2" />
-											Ajouter
-										</Button>
+									
+									<div className="space-y-6">
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+											<div>
+												<label className="block text-sm font-semibold text-gray-800 mb-2">Description</label>
+												<Input
+													placeholder="Description de l'action"
+													value={newAction.action || ''}
+													onChange={(e) => setNewAction(prev => ({ ...prev, action: e.target.value }))}
+													className="w-full"
+												/>
+											</div>
+											<div>
+												<label className="block text-sm font-semibold text-gray-800 mb-2">Responsable</label>
+												<Select
+													options={responsableOptions}
+													value={newAction.responsable || ''}
+													onChange={(e) => setNewAction(prev => ({ ...prev, responsable: e.target.value }))}
+													className="w-full"
+												/>
+											</div>
+										</div>
+										
+										<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+											<div>
+												<label className="block text-sm font-semibold text-gray-800 mb-2">Ressources internes</label>
+												<Input
+													placeholder="Ex: 1 mécanicien, 2h"
+													value={newAction.ressourcesInternes || ''}
+													onChange={(e) => setNewAction(prev => ({ ...prev, ressourcesInternes: e.target.value }))}
+													className="w-full"
+												/>
+											</div>
+											<div>
+												<label className="block text-sm font-semibold text-gray-800 mb-2">Ressources externes</label>
+												<Input
+													placeholder="Ex: 1 chaudronnier, 4h"
+													value={newAction.ressourcesExternes || ''}
+													onChange={(e) => setNewAction(prev => ({ ...prev, ressourcesExternes: e.target.value }))}
+													className="w-full"
+												/>
+											</div>
+										</div>
+										
+										<div className="flex items-end space-x-4">
+											<div className="flex space-x-3">
+												<div>
+													<label className="block text-sm font-semibold text-gray-800 mb-2">Jours</label>
+													<Input
+														type="number"
+														min="0"
+														placeholder="0"
+														value={newAction.dureeJours || ''}
+														onChange={(e) => setNewAction(prev => ({ ...prev, dureeJours: parseInt(e.target.value) || 0 }))}
+														className="w-20"
+													/>
+												</div>
+												<div>
+													<label className="block text-sm font-semibold text-gray-800 mb-2">Heures</label>
+													<Input
+														type="number"
+														min="0"
+														max="23"
+														placeholder="0"
+														value={newAction.dureeHeures || ''}
+														onChange={(e) => setNewAction(prev => ({ ...prev, dureeHeures: parseInt(e.target.value) || 0 }))}
+														className="w-20"
+													/>
+												</div>
+											</div>
+											<Button 
+												onClick={addAction} 
+												disabled={!newAction.action || !newAction.responsable}
+												className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+											>
+												<Plus className="w-5 h-5 mr-2" />
+												Ajouter l'action
+											</Button>
+										</div>
 									</div>
 								</div>
 							</div>
-						</CardContent>
-					</Card>
+						</div>
 
-					{/* Résumé */}
-					<Card>
-						<CardContent className="p-6">
+						{/* Summary and Comments */}
+						<div className="bg-gradient-to-br from-white to-purple-50/30 border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300">
+							<div className="p-8">
+								<div className="flex items-center space-x-4 mb-6">
+									<div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+										<Clock className="w-6 h-6 text-white" />
+									</div>
+									<div>
+										<h3 className="text-xl font-bold text-gray-900">Résumé et Commentaires</h3>
+										<p className="text-sm text-gray-600">Informations supplémentaires et notes importantes</p>
+									</div>
+								</div>
 
-							<h2 className="text-sm font-medium text-gray-900 mb-2">Résumé des Actions</h2>
-							{/* Actions Summary */}
-							<div className="mb-4">
-								<div className="grid grid-cols-4 gap-2 text-center">
-									<div className="bg-blue-50 p-2 rounded">
-										<div className="text-lg font-bold text-blue-900">
-											{actionPlan.actions.filter(a => a.statut === 'planifie').length}
-										</div>
-										<div className="text-xs text-blue-600">Planifiées</div>
-									</div>
-									<div className="bg-yellow-50 p-2 rounded">
-										<div className="text-lg font-bold text-yellow-900">
-											{actionPlan.actions.filter(a => a.statut === 'en_cours').length}
-										</div>
-										<div className="text-xs text-yellow-600">En cours</div>
-									</div>
-									<div className="bg-green-50 p-2 rounded">
-										<div className="text-lg font-bold text-green-900">
-											{actionPlan.actions.filter(a => a.statut === 'termine').length}
-										</div>
-										<div className="text-xs text-green-600">Terminées</div>
-									</div>
-									<div className="bg-red-50 p-2 rounded">
-										<div className="text-lg font-bold text-red-900">
-											{actionPlan.actions.filter(a => a.statut === 'reporte').length}
-										</div>
-										<div className="text-xs text-red-600">Reportées</div>
+								<div className="space-y-6">
+									<div>
+										<label className="block text-sm font-semibold text-gray-800 mb-3">
+											Commentaires additionnels
+										</label>
+										<textarea
+											value={actionPlan.comments}
+											onChange={(e) => setActionPlan(prev => ({ ...prev, comments: e.target.value }))}
+											rows={4}
+											className="block w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 sm:text-sm resize-none"
+											placeholder="Ajoutez des commentaires, instructions spéciales, ou notes importantes sur ce plan d'action..."
+										/>
 									</div>
 								</div>
 							</div>
+						</div>
 
-							<div>
-								<label className="block text-sm font-medium text-gray-700 mb-2">Commentaires</label>
-								<textarea
-									value={actionPlan.comments}
-									onChange={(e) => setActionPlan(prev => ({ ...prev, comments: e.target.value }))}
-									rows={3}
-									className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-									placeholder="Commentaires additionnels sur le plan d'action..."
-								/>
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* Planning Integration Alert */}
-					{actionPlan.needsOutage && (
-						<div className={`p-4 rounded-lg border ${actionPlan.outageType === 'force'
-							? 'bg-red-50 border-red-200'
-							: 'bg-blue-50 border-blue-200'
+						{/* Planning Integration Alert */}
+						{actionPlan.needsOutage && (
+							<div className={`rounded-2xl border-2 p-8 shadow-md ${
+								actionPlan.outageType === 'force'
+									? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'
+									: 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200'
 							}`}>
-							<div className="flex items-center space-x-2">
-								<AlertTriangle className={`w-5 h-5 ${actionPlan.outageType === 'force' ? 'text-red-600' : 'text-blue-600'
-									}`} />
-								<span className={`font-medium ${actionPlan.outageType === 'force' ? 'text-red-900' : 'text-blue-900'
+								<div className="flex items-start space-x-4">
+									<div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${
+										actionPlan.outageType === 'force' 
+											? 'bg-gradient-to-br from-red-500 to-red-600' 
+											: 'bg-gradient-to-br from-blue-500 to-blue-600'
 									}`}>
-									{actionPlan.outageType === 'force'
-										? 'Arrêt d\'urgence - Sera créé automatiquement'
-										: 'Sera intégré au planning existant ou créera un nouvel arrêt'
-									}
+										<AlertTriangle className="w-6 h-6 text-white" />
+									</div>
+									<div>
+										<h4 className={`text-lg font-bold ${
+											actionPlan.outageType === 'force' ? 'text-red-900' : 'text-blue-900'
+										}`}>
+											{actionPlan.outageType === 'force'
+												? 'Arrêt d\'urgence - Création automatique'
+												: 'Intégration au planning de maintenance'
+											}
+										</h4>
+										<p className={`text-sm mt-2 ${
+											actionPlan.outageType === 'force' ? 'text-red-700' : 'text-blue-700'
+										}`}>
+											{actionPlan.outageType === 'force'
+												? 'Un arrêt d\'urgence sera automatiquement ajouté au planning lors de la sauvegarde. Les équipes seront notifiées immédiatement.'
+												: 'Le système recherchera automatiquement un créneau compatible dans le planning existant ou créera un nouvel arrêt si nécessaire.'
+											}
+										</p>
+									</div>
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+
+				{/* Footer */}
+				<div className="flex justify-between items-center p-8 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50">
+					<div className="text-sm text-gray-700 font-medium">
+						{actionPlan.actions.length > 0 && (
+							<div className="flex items-center space-x-4">
+								<span className="bg-white px-4 py-2 rounded-full shadow-sm">
+									Durée totale: {actionPlan.totalDurationDays} jour{actionPlan.totalDurationDays !== 1 ? 's' : ''} et {actionPlan.totalDurationHours} heure{actionPlan.totalDurationHours !== 1 ? 's' : ''}
 								</span>
 							</div>
-							<p className={`text-sm mt-1 ${actionPlan.outageType === 'force' ? 'text-red-700' : 'text-blue-700'
-								}`}>
-								{actionPlan.outageType === 'force'
-									? 'Un arrêt d\'urgence sera automatiquement ajouté au planning lors de la sauvegarde.'
-									: 'Le système recherchera automatiquement un créneau compatible ou créera un nouvel arrêt.'
-								}
-							</p>
-						</div>
-					)}
-
-					{/* Actions */}
-					<div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-						<Button variant="outline" onClick={onClose}>
+						)}
+					</div>
+					<div className="flex space-x-4">
+						<Button 
+							variant="outline" 
+							onClick={onClose} 
+							className="px-8 py-3 rounded-xl font-semibold border-2 hover:bg-gray-50"
+						>
 							Annuler
 						</Button>
-						<Button onClick={handleSave} disabled={isSaving}>
+						<Button 
+							onClick={handleSave} 
+							disabled={isSaving || actionPlan.actions.length === 0}
+							className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-8 py-3 rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+						>
 							{isSaving ? (
 								<>
-									<Loader className="w-4 h-4 mr-2 animate-spin" />
-									Sauvegarde en cours...
+									<Loader className="w-5 h-5 mr-2 animate-spin" />
+									Sauvegarde...
 								</>
 							) : (
 								<>
-									<Save className="w-4 h-4 mr-2" />
+									<Save className="w-5 h-5 mr-2" />
 									Sauvegarder le Plan
 								</>
 							)}

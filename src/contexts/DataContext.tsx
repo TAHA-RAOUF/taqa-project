@@ -6,6 +6,7 @@ import { maintenanceWindowService } from '../services/maintenanceWindowService';
 import { loggingService } from '../services/loggingService';
 import { supabaseActionPlanService, CreateActionPlanData, UpdateActionPlanData } from '../services/supabaseActionPlanService';
 import { generateId } from '../lib/utils';
+import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
 interface DataContextType {
@@ -44,6 +45,9 @@ interface DataContextType {
     unassigned: number;
   }>;
   
+  // Data management
+  reloadData: () => Promise<void>;
+  
   // Additional properties
   isLoading: boolean;
   useBackend: boolean;
@@ -65,87 +69,100 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [actionPlans, setActionPlans] = useState<ActionPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [useBackend, setUseBackend] = useState(true);
+  const { user } = useAuth();
 
   // Initialize data from Supabase
-  useEffect(() => {
-    const initializeData = async () => {
-      setIsLoading(true);
+  const initializeData = async () => {
+    setIsLoading(true);
+    try {
+      // Initialize logging service
+      await loggingService.initialize();
+      
+      // Load non-archived anomalies directly from Supabase
+      const anomaliesResponse = await anomalyService.getAllAnomalies({ 
+        per_page: 1000,
+        archived: false // Only get non-archived records (status != cloture)
+      });
+      
+      setAnomalies(anomaliesResponse);
+      
+      // Load maintenance windows from backend
+      let windowsResponse: MaintenanceWindow[] = [];
       try {
-        // Initialize logging service
-        await loggingService.initialize();
-        
-        // Load non-archived anomalies directly from Supabase
-        const anomaliesResponse = await anomalyService.getAllAnomalies({ 
-          per_page: 1000,
-          archived: false // Only get non-archived records (status != cloture)
-        });
-        
-        setAnomalies(anomaliesResponse);
-        
-        // Load maintenance windows from backend
-        let windowsResponse: MaintenanceWindow[] = [];
-        try {
-          windowsResponse = await maintenanceWindowService.getMaintenanceWindows();
-          setMaintenanceWindows(windowsResponse);
-        } catch (windowError) {
-          console.warn('Failed to load maintenance windows from backend, using mock data:', windowError);
-          setMaintenanceWindows(mockMaintenanceWindows);
-        }
-        
-        // Load action plans from Supabase
-        const actionPlansResponse = await supabaseActionPlanService.getAllActionPlans();
-        setActionPlans(actionPlansResponse);
-        
-        setUseBackend(true);
-        
-        toast.success(`${anomaliesResponse.length} anomalies chargées depuis Supabase`);
-        
-        // Log successful data load
-        await loggingService.logAction({
-          action: 'data_import',
-          category: 'data_operation',
-          entity: 'system',
-          details: {
-            description: `Successfully loaded ${anomaliesResponse.length} anomalies from Supabase`,
-            additionalInfo: {
-              anomaliesCount: anomaliesResponse.length,
-              maintenanceWindowsCount: windowsResponse.length
-            }
-          },
-          severity: 'success',
-          success: true
-        });
-      } catch (error) {
-        console.error('Failed to load data from Supabase:', error);
-        setUseBackend(false);
-        setAnomalies([]);
-        
-        // Log error
-        await loggingService.logAction({
-          action: 'data_import',
-          category: 'data_operation',
-          entity: 'system',
-          details: {
-            description: 'Failed to load data from Supabase',
-            additionalInfo: {
-              error: error instanceof Error ? error.message : 'Unknown error'
-            }
-          },
-          severity: 'error',
-          success: false,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error'
-        });
+        windowsResponse = await maintenanceWindowService.getMaintenanceWindows();
+        setMaintenanceWindows(windowsResponse);
+      } catch (windowError) {
+        console.warn('Failed to load maintenance windows from backend, using mock data:', windowError);
         setMaintenanceWindows(mockMaintenanceWindows);
-        setActionPlans([]);
-        
-        toast.error('Erreur lors du chargement des données Supabase');
-      } finally {
-        setIsLoading(false);
       }
-    };
-    
-    initializeData();
-  }, []);
+      
+      // Load action plans from Supabase
+      const actionPlansResponse = await supabaseActionPlanService.getAllActionPlans();
+      setActionPlans(actionPlansResponse);
+      
+      setUseBackend(true);
+      
+      // Log successful data load
+      await loggingService.logAction({
+        action: 'data_import',
+        category: 'data_operation',
+        entity: 'system',
+        details: {
+          description: `Successfully loaded ${anomaliesResponse.length} anomalies from Supabase`,
+          additionalInfo: {
+            anomaliesCount: anomaliesResponse.length,
+            maintenanceWindowsCount: windowsResponse.length
+          }
+        },
+        severity: 'success',
+        success: true
+      });
+    } catch (error) {
+      console.error('Failed to load data from Supabase:', error);
+      setUseBackend(false);
+      setAnomalies([]);
+      
+      // Log error
+      await loggingService.logAction({
+        action: 'data_import',
+        category: 'data_operation',
+        entity: 'system',
+        details: {
+          description: 'Failed to load data from Supabase',
+          additionalInfo: {
+            error: error instanceof Error ? error.message : 'Unknown error'
+          }
+        },
+        severity: 'error',
+        success: false,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
+      setMaintenanceWindows(mockMaintenanceWindows);
+      setActionPlans([]);
+      
+      toast.error('Erreur lors du chargement des données Supabase');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Reload data function
+  const reloadData = async () => {
+    await initializeData();
+  };
+
+  // Load data on mount and when user changes (login/logout)
+  useEffect(() => {
+    if (user) {
+      initializeData();
+    } else {
+      // Clear data when user logs out
+      setAnomalies([]);
+      setMaintenanceWindows([]);
+      setActionPlans([]);
+      setIsLoading(false);
+    }
+  }, [user]);
 
   // Anomaly functions
   const addAnomaly = async (anomalyData: Omit<Anomaly, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -529,6 +546,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getMaintenanceWindowById,
     getActionPlanById,
     getAnomalyStats,
+    
+    // Data management
+    reloadData,
     
     // Additional properties for debugging
     isLoading,

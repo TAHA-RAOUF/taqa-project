@@ -111,17 +111,12 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
         <div>
           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <Calendar className="h-5 w-5 text-blue-600" />
-            Maintenance Windows
+            Vue d'ensemble
           </h2>
           <p className="text-sm text-gray-600 mt-1">
-            Manage and monitor maintenance windows
+            Fenêtres de maintenance et anomalies
           </p>
         </div>
-        
-        <Button onClick={onCreateWindow} className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
-          New Window
-        </Button>
       </div>
 
       {/* Windows Grid */}
@@ -148,15 +143,16 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
                   <div className="flex items-center gap-3">
                     <div className={`${getWindowTypeColor(window.type)} rounded-xl p-3 shadow-sm`}>
                       <Calendar className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base font-bold text-gray-900">
-                        {window.type.toUpperCase()} Window
-                      </CardTitle>
-                      <p className="text-sm text-gray-500 font-medium">
-                        {window.durationDays} jours de maintenance
-                      </p>
-                    </div>
+                    </div>              <div>
+                <CardTitle className="text-base font-bold text-gray-900">
+                  {window.type === 'force' ? 'Arrêt forcé' : 
+                   window.type === 'major' ? 'Arrêt majeur' : 
+                   'Arrêt mineur'}
+                </CardTitle>
+                <p className="text-sm text-gray-500 font-medium">
+                  {window.durationDays} jours de maintenance
+                </p>
+              </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -307,8 +303,8 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
             <CardContent className="flex items-center justify-center h-full min-h-[300px]">
               <div className="text-center text-gray-500">
                 <Plus className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="font-medium">Create New Window</p>
-                <p className="text-xs mt-1">Schedule maintenance activities</p>
+                <p className="font-medium">Nouvelle fenêtre</p>
+                <p className="text-xs mt-1">Planifiez des activités de maintenance</p>
               </div>
             </CardContent>
           </Card>
@@ -318,11 +314,11 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
       {windows.length === 0 && (
         <div className="text-center py-12">
           <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No maintenance windows</h3>
-          <p className="text-gray-600 mb-4">Create your first maintenance window to start scheduling</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Aucune fenêtre de maintenance</h3>
+          <p className="text-gray-600 mb-4">Créez votre première fenêtre pour commencer la planification</p>
           <Button onClick={onCreateWindow}>
             <Plus className="h-4 w-4 mr-2" />
-            Create First Window
+            Créer une fenêtre
           </Button>
         </div>
       )}

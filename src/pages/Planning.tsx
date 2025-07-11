@@ -244,108 +244,182 @@ export const Planning: React.FC = () => {
   };
   
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Planning Intelligent</h1>
-          <p className="text-gray-600">Système interactif de planification avec IA pour l'assignation automatique</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Calendar className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Planning Intelligent</h1>
+                <p className="text-gray-600 text-lg mt-1">Système interactif de planification avec IA pour l'assignation automatique</p>
+              </div>
+            </div>
+            
+            {/* Action Controls Moved Here */}
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={handleOptimizeWithAI}
+                className="bg-gradient-to-r from-emerald-50 to-green-50 border-green-200 text-green-700 hover:bg-gradient-to-r hover:from-green-100 hover:to-emerald-100 hover:border-green-300 px-6 py-3 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <Settings className="h-5 w-5 mr-2" />
+                Optimiser IA
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                onClick={handleAutoAssignTreated}
+                className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 text-blue-700 hover:bg-gradient-to-r hover:from-blue-100 hover:to-indigo-100 hover:border-blue-300 px-6 py-3 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <RefreshCw className="h-5 w-5 mr-2" />
+                Assigner Traitées
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                onClick={handleCreateAutomaticWindow}
+                className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 text-orange-700 hover:bg-gradient-to-r hover:from-orange-100 hover:to-amber-100 hover:border-orange-300 px-6 py-3 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <Zap className="h-5 w-5 mr-2" />
+                Arrêt Auto
+              </Button>
+
+              {/* Toggle Controls */}
+              <div className="flex items-center space-x-3 bg-gray-100 rounded-xl p-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => intelligentPlanning.setAutoScheduleEnabled(!intelligentPlanning.autoScheduleEnabled)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    intelligentPlanning.autoScheduleEnabled 
+                      ? 'bg-green-600 text-white shadow-md' 
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Auto-Schedule
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToggleAutoAssignment}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+                    autoAssignmentEnabled 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'bg-white text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  Auto-Assign
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex space-x-2">
-          <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-            <Button
-              variant={activeTab === 'calendar' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setActiveTab('calendar')}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Planning
-            </Button>
-            <Button
-              variant={activeTab === 'intelligent' ? 'primary' : 'ghost'}
-              size="sm"
-              onClick={() => setActiveTab('intelligent')}
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              IA Automatique
-            </Button>
-          </div>
-          <Button variant="outline" onClick={handleOptimizeWithAI}>
-            <Settings className="h-4 w-4 mr-2" />
-            Optimiser IA
-          </Button>
-          <Button variant="outline" onClick={handleAutoAssignTreated}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Assigner Traitées
-          </Button>
-          <Button variant="outline" onClick={handleCreateAutomaticWindow}>
-            <Zap className="h-4 w-4 mr-2" />
-            Arrêt Auto
-          </Button>
-          <div className="flex items-center space-x-2">
-            <div className={`h-2 w-2 rounded-full ${
-              intelligentPlanning.autoScheduleEnabled ? 'bg-green-500' : 'bg-gray-400'
+
+        {/* Status Indicators */}
+        <div className="flex items-center space-x-6 mb-8">
+          <div className="flex items-center space-x-3 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-full px-4 py-2">
+            <div className={`h-3 w-3 rounded-full ${
+              intelligentPlanning.autoScheduleEnabled ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
             }`} />
-            <span className="text-sm text-gray-600">
-              Auto-schedule: {intelligentPlanning.autoScheduleEnabled ? 'ON' : 'OFF'}
+            <span className="text-sm font-semibold text-gray-700">
+              Auto-schedule: {intelligentPlanning.autoScheduleEnabled ? 'Activé' : 'Désactivé'}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => intelligentPlanning.setAutoScheduleEnabled(!intelligentPlanning.autoScheduleEnabled)}
-            >
-              {intelligentPlanning.autoScheduleEnabled ? 'Désactiver' : 'Activer'}
-            </Button>
           </div>
-          <div className="flex items-center space-x-2">
-            <div className={`h-2 w-2 rounded-full ${
-              autoAssignmentEnabled ? 'bg-blue-500' : 'bg-gray-400'
+          
+          <div className="flex items-center space-x-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-full px-4 py-2">
+            <div className={`h-3 w-3 rounded-full ${
+              autoAssignmentEnabled ? 'bg-blue-500 animate-pulse' : 'bg-gray-400'
             }`} />
-            <span className="text-sm text-gray-600">
-              Auto-assign: {autoAssignmentEnabled ? 'ON' : 'OFF'}
+            <span className="text-sm font-semibold text-gray-700">
+              Auto-assign: {autoAssignmentEnabled ? 'Activé' : 'Désactivé'}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleToggleAutoAssignment}
-            >
-              {autoAssignmentEnabled ? 'Désactiver' : 'Activer'}
-            </Button>
           </div>
+        </div>
+
+        {/* Navigation Tabs and Controls */}
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-6 mb-8">
+          <div className="flex items-center justify-between">
+            {/* Tab Navigation */}
+            <div className="flex items-center space-x-2 bg-gray-100 rounded-2xl p-2">
+              <Button
+                variant={activeTab === 'calendar' ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('calendar')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                  activeTab === 'calendar' 
+                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                <Calendar className="h-5 w-5 mr-2" />
+                Vue Planning
+              </Button>
+              <Button
+                variant={activeTab === 'intelligent' ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveTab('intelligent')}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+                  activeTab === 'intelligent' 
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200'
+                }`}
+              >
+                <Zap className="h-5 w-5 mr-2" />
+                IA Automatique
+              </Button>
+            </div>
+
+
+          </div>
+        </div>
+        
+        {/* Treated Anomalies Status */}
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-200 overflow-hidden mb-8">
+          <TreatedAnomaliesStatus
+            anomalies={anomalies}
+            maintenanceWindows={maintenanceWindows}
+            onAutoAssign={handleAutoAssignTreated}
+            onCreateWindow={() => {
+              const treatedUnassigned = anomalies.filter(a => 
+                a.status === 'treated' && !a.maintenanceWindowId
+              );
+              const newWindows = AutoPlanningService.createWindowForTreatedAnomalies(treatedUnassigned, actionPlans);
+              newWindows.forEach(window => addMaintenanceWindow(window));
+              toast.success(`${newWindows.length} fenêtres créées pour anomalies traitées`);
+            }}
+          />
+        </div>
+        
+        {/* Main Content Area */}
+        <div className="bg-white rounded-3xl shadow-lg border border-gray-200 overflow-hidden min-h-[800px]">
+          {activeTab === 'calendar' ? (
+            <div className="p-12 min-h-[700px]">
+              <CalendarView 
+                anomalies={anomalies}
+                maintenanceWindows={maintenanceWindows}
+                onScheduleAnomaly={handleSchedule}
+                onCreateWindow={handleCreateWindow}
+                onUpdateWindows={handleUpdateWindows}
+                actionPlans={actionPlans}
+              />
+            </div>
+          ) : (
+            <div className="p-12 min-h-[700px]">
+              <IntelligentPlanning
+                onScheduleComplete={handleIntelligentScheduleComplete}
+                onWindowCreate={handleWindowCreate}
+                anomalies={anomalies}
+                maintenanceWindows={maintenanceWindows}
+              />
+            </div>
+          )}
         </div>
       </div>
-      
-      {/* Treated Anomalies Status */}
-      <TreatedAnomaliesStatus
-        anomalies={anomalies}
-        maintenanceWindows={maintenanceWindows}
-        onAutoAssign={handleAutoAssignTreated}
-        onCreateWindow={() => {
-          const treatedUnassigned = anomalies.filter(a => 
-            a.status === 'treated' && !a.maintenanceWindowId
-          );
-          const newWindows = AutoPlanningService.createWindowForTreatedAnomalies(treatedUnassigned, actionPlans);
-          newWindows.forEach(window => addMaintenanceWindow(window));
-          toast.success(`${newWindows.length} fenêtres créées pour anomalies traitées`);
-        }}
-      />
-      
-      {activeTab === 'calendar' ? (
-        <CalendarView 
-          anomalies={anomalies}
-          maintenanceWindows={maintenanceWindows}
-          onScheduleAnomaly={handleSchedule}
-          onCreateWindow={handleCreateWindow}
-          onUpdateWindows={handleUpdateWindows}
-          actionPlans={actionPlans}
-        />
-      ) : (
-        <IntelligentPlanning
-          onScheduleComplete={handleIntelligentScheduleComplete}
-          onWindowCreate={handleWindowCreate}
-          anomalies={anomalies}
-          maintenanceWindows={maintenanceWindows}
-        />
-      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   BarChart3, 
   AlertTriangle, 
@@ -9,13 +9,16 @@ import {
   LogOut,
   Settings,
   FileText,
-  Archive
+  Archive,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '../ui/Button';
+import { Dropdown } from '../ui/Dropdown';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const Header: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   
   const navigation = [
@@ -25,6 +28,25 @@ export const Header: React.FC = () => {
     { name: 'Archives', href: '/archive', icon: Archive },
     { name: 'Chat AI', href: '/chat', icon: MessageCircle },
     { name: 'Logs', href: '/logs', icon: FileText },
+  ];
+
+  const userMenuItems = [
+    {
+      label: 'Profil',
+      icon: <User className="w-4 h-4" />,
+      onClick: () => navigate('/profile')
+    },
+    {
+      label: 'Paramètres',
+      icon: <Settings className="w-4 h-4" />,
+      onClick: () => navigate('/settings')
+    },
+    {
+      label: 'Déconnexion',
+      icon: <LogOut className="w-4 h-4" />,
+      onClick: logout,
+      className: 'text-red-600 hover:text-red-700 hover:bg-red-50'
+    }
   ];
   
   return (
@@ -69,9 +91,11 @@ export const Header: React.FC = () => {
           
           {/* Actions */}
           <div className="flex items-center space-x-4">
-            {/* User Menu */}
-            <div className="flex items-center space-x-2">
-              <Link to="/profile">
+            {/* User Menu Dropdown */}
+            <Dropdown
+              align="right"
+              items={userMenuItems}
+              trigger={
                 <Button variant="ghost" size="sm" className="flex items-center space-x-2 hover:bg-blue-50">
                   {user?.avatar ? (
                     <img
@@ -85,21 +109,10 @@ export const Header: React.FC = () => {
                     </div>
                   )}
                   <span className="hidden md:inline text-sm">{user?.name}</span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
                 </Button>
-              </Link>
-              <Link to="/settings">
-                <Button variant="ghost" size="sm" className="hover:bg-gray-50">
-                  <Settings className="w-4 h-4" />
-                </Button>
-              </Link>
-              {/* <Button variant="ghost" size="sm" className="hover:bg-gray-50">
-                <Settings className="w-4 h-4" />
-              </Button> */}
-              
-              <Button variant="ghost" size="sm" onClick={logout} className="hover:bg-red-50 hover:text-red-600">
-                <LogOut className="w-4 h-4" />
-              </Button>
-            </div>
+              }
+            />
           </div>
         </div>
       </div>

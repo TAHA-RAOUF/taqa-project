@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Search, 
-  Download, 
   Eye, 
   Edit, 
-  Archive,
   RotateCcw,
   ChevronUp,
   ChevronDown,
@@ -13,47 +11,47 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import { Card, CardHeader, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Badge } from '../ui/Badge';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Anomaly } from '../../types';
 import { formatDate } from '../../lib/utils';
-import toast from 'react-hot-toast';
 
 interface AnomalyTableProps {
   anomalies: Anomaly[];
   onEdit?: (anomaly: Anomaly) => void;
   onDelete?: (anomaly: Anomaly) => void;
-  onArchive?: (anomaly: Anomaly) => void;
   onRestore?: (anomaly: Anomaly) => void;
   isArchive?: boolean;
+  isLoading?: boolean;
 }
 
 export const AnomalyTable: React.FC<AnomalyTableProps> = ({ 
   anomalies, 
   onEdit, 
   onDelete,
-  onArchive,
   onRestore,
-  isArchive = false
+  isArchive = false,
+  isLoading = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
   const [criticalityFilter, setCriticalityFilter] = useState('all');
-  const [sortField, setSortField] = useState<keyof Anomaly>('createdAt');
+  const [sortField, setSortField] = useState<keyof Anomaly | 'criticality'>('criticality');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   
   const statusOptions = [
     { value: 'all', label: 'Tous les statuts' },
-    { value: 'new', label: 'Nouveau' },
-    { value: 'in_progress', label: 'En cours' },
-    { value: 'treated', label: 'Traité' },
-    { value: 'closed', label: 'Fermé' },
+    { value: 'new', label: '🆕 Nouveau' },
+    { value: 'in_progress', label: '⏳ En cours' },
+    { value: 'treated', label: '✅ Traité' },
+    { value: 'closed', label: '🔒 Fermé' },
   ];
   
   // Dynamic service options based on actual data
@@ -65,31 +63,58 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
 
   const criticalityOptions = [
     { value: 'all', label: 'Toutes les criticités' },
-    { value: 'low', label: 'Faible' },
-    { value: 'medium', label: 'Normale' },
-    { value: 'high', label: 'Élevée' },
-    { value: 'critical', label: 'Critique' },
+    { value: 'critical', label: '🔴 Critique' },
+    { value: 'high', label: '🟠 Élevée' },
+    { value: 'normal', label: '🟡 Normale' },
+    { value: 'low', label: '🟢 Faible' },
   ];
   
-  // Calculate criticality level based on sum of scores
-  const calculateCriticalityLevel = (anomaly: Anomaly): 'low' | 'medium' | 'high' | 'critical' => {
+  // Calculate criticality level based on sum of scores - Updated logic
+  const calculateCriticalityLevel = (anomaly: Anomaly): 'low' | 'normal' | 'high' | 'critical' => {
     const fiabiliteIntegriteScore = anomaly.userFiabiliteIntegriteScore ?? anomaly.fiabiliteIntegriteScore ?? 0;
     const disponibiliteScore = anomaly.userDisponibiliteScore ?? anomaly.disponibiliteScore ?? 0;
     const processSafetyScore = anomaly.userProcessSafetyScore ?? anomaly.processSafetyScore ?? 0;
     
     const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
     
-    if (totalScore > 9) return 'critical';   // > 9: Anomalies critiques
-    if (totalScore >= 7) return 'high';     // 7-8: Anomalies à criticité élevée
-    if (totalScore >= 3) return 'medium';   // 3-6: Anomalies à criticité normale
-    return 'low';                           // 0-2: Anomalies à criticité faible
+    // New criticality logic:
+    // >= 9: Anomalies critiques
+    // 7-8: Anomalies à criticité élevée  
+    // 3-6: Anomalies à criticité normale
+    // 0-2: Anomalies à criticité faible
+    if (totalScore >= 9) return 'critical';
+    if (totalScore >= 7) return 'high';
+    if (totalScore >= 3) return 'normal';
+    return 'low';
+  };
+
+  // French translations for criticality levels
+  const getCriticalityLabel = (level: 'low' | 'normal' | 'high' | 'critical'): string => {
+    switch (level) {
+      case 'critical': return 'Critique';
+      case 'high': return 'Élevée';
+      case 'normal': return 'Normale';
+      case 'low': return 'Faible';
+      default: return 'Normale';
+    }
+  };
+
+  // French translations for status
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'new': return 'Nouveau';
+      case 'in_progress': return 'En cours';
+      case 'treated': return 'Traité';
+      case 'closed': return 'Fermé';
+      default: return 'Nouveau';
+    }
   };
 
   const getBadgeVariant = (level: string) => {
     switch (level) {
       case 'critical': return 'danger';
       case 'high': return 'warning';
-      case 'medium': return 'info';
+      case 'normal': return 'info';
       case 'low': return 'success';
       default: return 'default';
     }
@@ -108,7 +133,9 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   const filteredAnomalies = anomalies.filter(anomaly => {
     const matchesSearch = (anomaly.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (anomaly.equipmentId || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (anomaly.responsiblePerson || '').toLowerCase().includes(searchTerm.toLowerCase());
+                         (anomaly.responsiblePerson || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (anomaly.service || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (anomaly.title || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || anomaly.status === statusFilter;
     const matchesService = serviceFilter === 'all' || anomaly.service === serviceFilter;
     const matchesCriticality = criticalityFilter === 'all' || calculateCriticalityLevel(anomaly) === criticalityFilter;
@@ -117,8 +144,18 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
   });
   
   const sortedAnomalies = [...filteredAnomalies].sort((a, b) => {
-    const aValue = a[sortField];
-    const bValue = b[sortField];
+    let aValue: any;
+    let bValue: any;
+    
+    // Handle special sorting for criticality
+    if (sortField === 'criticality') {
+      const criticalityOrder = { 'critical': 4, 'high': 3, 'normal': 2, 'low': 1 };
+      aValue = criticalityOrder[calculateCriticalityLevel(a)];
+      bValue = criticalityOrder[calculateCriticalityLevel(b)];
+    } else {
+      aValue = a[sortField as keyof Anomaly];
+      bValue = b[sortField as keyof Anomaly];
+    }
     
     // Handle undefined/null values
     if (aValue == null && bValue == null) return 0;
@@ -148,92 +185,20 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
     { value: '50', label: '50 par page' },
   ];
   
-  const handleSort = (field: keyof Anomaly) => {
+  const handleSort = (field: keyof Anomaly | 'criticality') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection(field === 'criticality' ? 'desc' : 'asc'); // Default desc for criticality, asc for others
     }
     setCurrentPage(1); // Reset to first page when sorting changes
-  };
-  
-  const handleExport = () => {
-    try {
-      // Create CSV content
-      const headers = [
-        'ID',
-        'Équipement',
-        'Description',
-        'Service',
-        'Responsable',
-        'Statut',
-        'Criticité',
-        'Fiabilité/Intégrité',
-        'Disponibilité',
-        'Sécurité',
-        'Date Création',
-        'Heures Estimées',
-        'Priorité'
-      ];
-      
-      const csvContent = [
-        headers.join(','),
-        ...sortedAnomalies.map(anomaly => [
-          anomaly.id,
-          anomaly.equipmentId || '',
-          `"${(anomaly.description || '').replace(/"/g, '""')}"`,
-          anomaly.service || '',
-          `"${(anomaly.responsiblePerson || '').replace(/"/g, '""')}"`,
-          anomaly.status || '',
-          calculateCriticalityLevel(anomaly),
-          (anomaly.fiabiliteIntegriteScore || 0).toFixed(1),
-          (anomaly.disponibiliteScore || 0).toFixed(1),
-          (anomaly.processSafetyScore || 0).toFixed(1),
-          formatDate(anomaly.createdAt),
-          anomaly.estimatedHours || 0,
-          anomaly.priority || 1
-        ].join(','))
-      ].join('\n');
-      
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `anomalies_export_${new Date().toISOString().slice(0, 10)}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast.success('Export réalisé avec succès');
-    } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Erreur lors de l\'export');
-    }
   };
   
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-          <div className="flex flex-col">
-            <CardTitle>Gestion des Anomalies</CardTitle>
-            <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-              <span>
-                {filteredAnomalies.length > 0 && (
-                  <>Affichage de {startIndex + 1}-{Math.min(endIndex, filteredAnomalies.length)} sur </>
-                )}
-                {filteredAnomalies.length} anomalie{filteredAnomalies.length !== 1 ? 's' : ''} trouvée{filteredAnomalies.length !== 1 ? 's' : ''} sur {anomalies.length} au total
-              </span>
-              {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
-                <span className="text-blue-600 font-medium">
-                  Filtres actifs
-                </span>
-              )}
-            </div>
-          </div>
+        <div className="flex justify-end">
           <div className="flex space-x-2">
             {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
               <Button 
@@ -250,51 +215,102 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                 Réinitialiser
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
           </div>
         </div>
         
-        <div className="flex flex-col space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              placeholder="Rechercher par description, équipement, ou responsable..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="flex-1 min-w-[150px]">
-              <Select
-                options={statusOptions}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <div className="flex flex-col space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher par titre, description, équipement, responsable ou service..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-11 text-sm border-gray-300 focus:border-blue-500 focus:ring-blue-500 bg-white"
               />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
             </div>
-            <div className="flex-1 min-w-[150px]">
-              <Select
-                options={serviceOptions}
-                value={serviceFilter}
-                onChange={(e) => setServiceFilter(e.target.value)}
-              />
+            <div className="flex flex-wrap gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
+                <Select
+                  options={statusOptions}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Service</label>
+                <Select
+                  options={serviceOptions}
+                  value={serviceFilter}
+                  onChange={(e) => setServiceFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Criticité</label>
+                <Select
+                  options={criticalityOptions}
+                  value={criticalityFilter}
+                  onChange={(e) => setCriticalityFilter(e.target.value)}
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="flex-1 min-w-[150px]">
-              <Select
-                options={criticalityOptions}
-                value={criticalityFilter}
-                onChange={(e) => setCriticalityFilter(e.target.value)}
-              />
-            </div>
+            
+            {/* Active Filters Summary */}
+            {(statusFilter !== 'all' || serviceFilter !== 'all' || criticalityFilter !== 'all' || searchTerm) && (
+              <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                <span className="text-xs font-medium text-gray-600">Filtres actifs:</span>
+                <div className="flex flex-wrap gap-1">
+                  {searchTerm && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      Recherche: "{searchTerm}"
+                    </span>
+                  )}
+                  {statusFilter !== 'all' && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      Statut: {statusOptions.find(opt => opt.value === statusFilter)?.label}
+                    </span>
+                  )}
+                  {serviceFilter !== 'all' && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      Service: {serviceFilter}
+                    </span>
+                  )}
+                  {criticalityFilter !== 'all' && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                      Criticité: {criticalityOptions.find(opt => opt.value === criticalityFilter)?.label}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>
       
       <CardContent>
-        <div className="overflow-x-auto">
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <LoadingSpinner size="lg" text="Chargement des anomalies..." />
+          </div>
+        )}
+        
+        {/* Table Content */}
+        {!isLoading && (
+          <>
+            <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -316,12 +332,22 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   Service
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <div className="flex items-center space-x-1">
-                    <span>Criticité</span>
-                    <div title="Calculé à partir de la somme des scores: Faible (0-2), Normale (3-6), Élevée (7-8), Critique (>9)">
+                  <button
+                    onClick={() => handleSort('criticality')}
+                    className="flex items-center space-x-1 hover:text-gray-700"
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>Criticité</span>
+                      {sortField === 'criticality' && (
+                        <span className="text-blue-600">
+                          {sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </span>
+                      )}
+                    </div>
+                    <div title="Calculé à partir de la somme des scores: Faible (0-2), Normale (3-6), Élevée (7-8), Critique (≥9). Cliquez pour trier.">
                       <Info className="w-3 h-3 text-gray-400 cursor-help" />
                     </div>
-                  </div>
+                  </button>
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
@@ -363,12 +389,12 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getBadgeVariant(calculateCriticalityLevel(anomaly))}>
-                      {calculateCriticalityLevel(anomaly)}
+                      {getCriticalityLabel(calculateCriticalityLevel(anomaly))}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <Badge variant={getStatusVariant(anomaly.status || 'new')}>
-                      {anomaly.status || 'new'}
+                      {getStatusLabel(anomaly.status || 'new')}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -390,7 +416,7 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                           )}
                           {onDelete && (
                             <Button variant="ghost" size="sm" onClick={() => onDelete(anomaly)}>
-                              <Archive className="w-4 h-4" />
+                              <RotateCcw className="w-4 h-4" />
                             </Button>
                           )}
                         </>
@@ -399,17 +425,6 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
                           {onEdit && (
                             <Button variant="ghost" size="sm" onClick={() => onEdit(anomaly)}>
                               <Edit className="w-4 h-4" />
-                            </Button>
-                          )}
-                          {onArchive && (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => onArchive(anomaly)}
-                              disabled={anomaly.status !== 'treated'}
-                              title={anomaly.status !== 'treated' ? 'L\'anomalie doit être traitée avant d\'être archivée' : 'Archiver l\'anomalie'}
-                            >
-                              <Archive className="w-4 h-4" />
                             </Button>
                           )}
                         </>
@@ -497,6 +512,8 @@ export const AnomalyTable: React.FC<AnomalyTableProps> = ({
               </Button>
             </div>
           </div>
+        )}
+        </>
         )}
       </CardContent>
     </Card>

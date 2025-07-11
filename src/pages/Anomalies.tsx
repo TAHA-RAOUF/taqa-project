@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Upload } from 'lucide-react';
+import { Plus, Upload, Download } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { AnomalyTable } from '../components/anomalies/AnomalyTable';
 import { AnomalyModal } from '../components/anomalies/AnomalyModal';
@@ -7,10 +7,11 @@ import { ImportModal } from '../components/import/ImportModal';
 import { useData } from '../contexts/DataContext';
 import { useAnomalyLogging } from '../hooks/useLogging';
 import { Anomaly } from '../types';
+import { formatDate } from '../lib/utils';
 import toast from 'react-hot-toast';
 
 export const Anomalies: React.FC = () => {
-  const { anomalies, addAnomaly, updateAnomaly, archiveAnomaly } = useData();
+  const { anomalies, addAnomaly, updateAnomaly, isLoading } = useData();
   const { 
     logAnomalyCreated, 
     logAnomalyUpdated, 
@@ -23,30 +24,6 @@ export const Anomalies: React.FC = () => {
   const handleEdit = (anomaly: Anomaly) => {
     setEditingAnomaly(anomaly);
     setShowModal(true);
-  };
-  
-  const handleArchive = async (anomaly: Anomaly) => {
-    if (anomaly.status !== 'treated') {
-      toast.error('L\'anomalie doit être traitée avant d\'être archivée');
-      return;
-    }
-    
-    if (window.confirm('Êtes-vous sûr de vouloir archiver cette anomalie ?')) {
-      try {
-        const success = await archiveAnomaly(
-          anomaly.id,
-          'User', // or get from auth context
-          'Archivage manuel depuis la liste des anomalies'
-        );
-        
-        if (!success) {
-          toast.error('Erreur lors de l\'archivage de l\'anomalie');
-        }
-      } catch (error) {
-        await logError(error as Error, 'anomaly-archive');
-        toast.error('Erreur lors de l\'archivage de l\'anomalie');
-      }
-    }
   };
 
   const handleCreateNew = () => {
@@ -87,6 +64,96 @@ export const Anomalies: React.FC = () => {
     setShowImportModal(false);
     toast.success(`Import réalisé: ${files.length} fichier(s) traité(s)`);
   };
+
+  // Helper functions for export
+  const calculateCriticalityLevel = (anomaly: Anomaly): 'low' | 'normal' | 'high' | 'critical' => {
+    const fiabiliteIntegriteScore = anomaly.userFiabiliteIntegriteScore ?? anomaly.fiabiliteIntegriteScore ?? 0;
+    const disponibiliteScore = anomaly.userDisponibiliteScore ?? anomaly.disponibiliteScore ?? 0;
+    const processSafetyScore = anomaly.userProcessSafetyScore ?? anomaly.processSafetyScore ?? 0;
+    
+    const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
+    
+    if (totalScore >= 9) return 'critical';
+    if (totalScore >= 7) return 'high';
+    if (totalScore >= 3) return 'normal';
+    return 'low';
+  };
+
+  const getCriticalityLabel = (level: 'low' | 'normal' | 'high' | 'critical'): string => {
+    switch (level) {
+      case 'critical': return 'Critique';
+      case 'high': return 'Élevée';
+      case 'normal': return 'Normale';
+      case 'low': return 'Faible';
+      default: return 'Normale';
+    }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'new': return 'Nouveau';
+      case 'in_progress': return 'En cours';
+      case 'treated': return 'Traité';
+      case 'closed': return 'Fermé';
+      default: return 'Nouveau';
+    }
+  };
+
+  const handleExport = () => {
+    try {
+      // Create CSV content
+      const headers = [
+        'ID',
+        'Équipement',
+        'Description',
+        'Service',
+        'Responsable',
+        'Statut',
+        'Criticité',
+        'Fiabilité/Intégrité',
+        'Disponibilité',
+        'Sécurité',
+        'Date Création',
+        'Heures Estimées',
+        'Priorité'
+      ];
+      
+      const csvContent = [
+        headers.join(','),
+        ...anomalies.map(anomaly => [
+          anomaly.id,
+          anomaly.equipmentId || '',
+          `"${(anomaly.description || '').replace(/"/g, '""')}"`,
+          anomaly.service || '',
+          `"${(anomaly.responsiblePerson || '').replace(/"/g, '""')}"`,
+          getStatusLabel(anomaly.status || ''),
+          getCriticalityLabel(calculateCriticalityLevel(anomaly)),
+          (anomaly.fiabiliteIntegriteScore || 0).toFixed(1),
+          (anomaly.disponibiliteScore || 0).toFixed(1),
+          (anomaly.processSafetyScore || 0).toFixed(1),
+          formatDate(anomaly.createdAt),
+          anomaly.estimatedHours || 0,
+          anomaly.priority || 1
+        ].join(','))
+      ].join('\n');
+      
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `anomalies_export_${new Date().toISOString().slice(0, 10)}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success('Export réalisé avec succès');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Erreur lors de l\'export');
+    }
+  };
   
   return (
     <div className="space-y-6">
@@ -99,6 +166,10 @@ export const Anomalies: React.FC = () => {
             <Upload className="h-4 w-4 mr-2" />
             Importer
           </Button>
+          <Button variant="outline" onClick={handleExport}>
+            <Download className="h-4 w-4 mr-2" />
+            Exporter
+          </Button>
           <Button onClick={handleCreateNew}>
             <Plus className="h-4 w-4 mr-2" />
             Nouvelle Anomalie
@@ -109,7 +180,7 @@ export const Anomalies: React.FC = () => {
       <AnomalyTable 
         anomalies={anomalies}
         onEdit={handleEdit}
-        onArchive={handleArchive}
+        isLoading={isLoading}
       />
       
       <AnomalyModal

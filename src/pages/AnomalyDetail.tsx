@@ -3,21 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Wrench,
-  Paperclip, 
-  MessageSquare, 
   Clock, 
-  User, 
-  AlertTriangle
+  AlertTriangle,
+  Edit,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { Input } from '../components/ui/Input';
 import { ActionPlanModal } from '../components/anomalies/ActionPlanModal';
 import { ActionPlanDetails } from '../components/anomalies/ActionPlanDetails';
 import { REXFileUpload } from '../components/anomalies/REXFileUpload';
 import { PredictionApproval } from '../components/anomalies/PredictionApproval';
 import { useData } from '../contexts/DataContext';
-import { formatDateTime, getCriticalityColor } from '../lib/utils';
+import { formatDateTime } from '../lib/utils';
 import { ActionPlan } from '../types';
 import { planningIntegration } from '../lib/planningUtils';
 import toast from 'react-hot-toast';
@@ -31,10 +32,11 @@ export const AnomalyDetail: React.FC = () => {
   const anomaly = id ? getAnomalyById(id) : undefined;
   
   const [showActionPlan, setShowActionPlan] = useState(false);
-  const [newComment, setNewComment] = useState('');
   const [actionPlan, setActionPlan] = useState<ActionPlan | undefined>(undefined);
   const [rexFileRefresh, setRexFileRefresh] = useState(0);
   const [hasRexFile, setHasRexFile] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedAnomaly, setEditedAnomaly] = useState(anomaly);
 
   // Load action plan when component mounts
   useEffect(() => {
@@ -52,7 +54,8 @@ export const AnomalyDetail: React.FC = () => {
     };
 
     loadActionPlan();
-  }, [anomaly?.id, getActionPlanByAnomalyId]);
+    setEditedAnomaly(anomaly);
+  }, [anomaly?.id, getActionPlanByAnomalyId, anomaly]);
 
   const statusOptions = [
     { value: 'new', label: 'Nouveau' },
@@ -60,17 +63,39 @@ export const AnomalyDetail: React.FC = () => {
     { value: 'treated', label: 'Traité' },
     { value: 'closed', label: 'Fermé' }
   ];
+
+  const criticalityLevels = [
+    { value: 'low', label: 'Faible', color: 'bg-green-500' },
+    { value: 'normal', label: 'Normale', color: 'bg-yellow-500' },
+    { value: 'high', label: 'Élevée', color: 'bg-orange-500' },
+    { value: 'critical', label: 'Critique', color: 'bg-red-500' }
+  ];
+
+  const calculateCriticalityLevel = (anomaly: any): 'low' | 'normal' | 'high' | 'critical' => {
+    const fiabiliteIntegriteScore = anomaly.userFiabiliteIntegriteScore ?? anomaly.fiabiliteIntegriteScore ?? 0;
+    const disponibiliteScore = anomaly.userDisponibiliteScore ?? anomaly.disponibiliteScore ?? 0;
+    const processSafetyScore = anomaly.userProcessSafetyScore ?? anomaly.processSafetyScore ?? 0;
+    
+    const totalScore = fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
+    
+    if (totalScore >= 9) return 'critical';
+    if (totalScore >= 7) return 'high';
+    if (totalScore >= 3) return 'normal';
+    return 'low';
+  };
   
   if (!anomaly) {
     return (
-      <div className="text-center py-12">
-        <AlertTriangle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Anomalie non trouvée</h2>
-        <p className="text-gray-600 mb-4">L'anomalie demandée n'existe pas ou a été supprimée.</p>
-        <Button onClick={() => navigate('/anomalies')}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Retour à la liste
-        </Button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center py-12">
+          <AlertTriangle className="h-16 w-16 text-gray-400 mx-auto mb-6" />
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">Anomalie non trouvée</h2>
+          <p className="text-gray-600 mb-6">L'anomalie demandée n'existe pas ou a été supprimée.</p>
+          <Button onClick={() => navigate('/anomalies')} className="bg-blue-600 hover:bg-blue-700">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Retour à la liste
+          </Button>
+        </div>
       </div>
     );
   }
@@ -82,6 +107,24 @@ export const AnomalyDetail: React.FC = () => {
       case 'treated': return 'success';
       case 'closed': return 'default';
       default: return 'default';
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editedAnomaly) return;
+    
+    try {
+      await updateAnomaly(anomaly.id, {
+        description: editedAnomaly.description,
+        service: editedAnomaly.service,
+        equipmentId: editedAnomaly.equipmentId,
+        status: editedAnomaly.status
+      });
+      setIsEditing(false);
+      toast.success('Anomalie mise à jour avec succès');
+    } catch (error) {
+      console.error('Error updating anomaly:', error);
+      toast.error('Erreur lors de la mise à jour');
     }
   };
 
@@ -144,13 +187,6 @@ export const AnomalyDetail: React.FC = () => {
       console.log('Created urgent maintenance window:', urgentWindow);
     }
   };
-
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
-    // In a real app, this would make an API call
-    toast.success('Commentaire ajouté');
-    setNewComment('');
-  };
   
   const handleAnomalyStatusUpdate = async (anomalyId: string, status: 'new' | 'in_progress' | 'treated' | 'closed') => {
     if (!anomaly) return;
@@ -189,141 +225,202 @@ export const AnomalyDetail: React.FC = () => {
     }
   };
 
+  const currentCriticality = calculateCriticalityLevel(anomaly);
+  const criticalityInfo = criticalityLevels.find(level => level.value === currentCriticality);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" onClick={() => navigate('/anomalies')}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Retour
-          </Button>
-          <div className="flex items-center space-x-3">
-            <div className={`w-3 h-3 rounded-full ${getCriticalityColor(anomaly.criticalityLevel)}`} />
-            <h1 className="text-2xl font-bold text-gray-900">Détail de l'Anomalie</h1>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" onClick={() => navigate('/anomalies')} className="text-gray-600 hover:text-gray-900">
+                <ArrowLeft className="h-5 w-5 mr-2" />
+                Retour aux anomalies
+              </Button>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+              {!isEditing ? (
+                <Button variant="outline" onClick={() => setIsEditing(true)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Modifier
+                </Button>
+              ) : (
+                <div className="flex space-x-2">
+                  <Button variant="outline" onClick={() => {
+                    setIsEditing(false);
+                    setEditedAnomaly(anomaly);
+                  }}>
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Annuler
+                  </Button>
+                  <Button onClick={handleSaveEdit}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Sauvegarder
+                  </Button>
+                </div>
+              )}
+              
+              <Button 
+                onClick={() => setShowActionPlan(true)}
+                className={actionPlan ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}
+              >
+                <Wrench className="h-4 w-4 mr-2" />
+                {actionPlan ? 'Modifier Plan' : 'Créer Plan d\'Action'}
+              </Button>
+            </div>
+          </div>
+          
+          {/* Title and Status */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className={`w-4 h-4 rounded-full ${criticalityInfo?.color}`} />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Anomalie #{anomaly.id.substring(0, 8)}
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Créée le {formatDateTime(anomaly.createdAt)}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <Badge variant={getStatusVariant(anomaly.status)} className="text-sm py-1 px-3">
+                {statusOptions.find(s => s.value === anomaly.status)?.label}
+              </Badge>
+              <Badge variant={currentCriticality === 'critical' ? 'danger' : currentCriticality === 'high' ? 'warning' : 'default'} className="text-sm py-1 px-3">
+                Criticité {criticalityInfo?.label}
+              </Badge>
+            </div>
           </div>
         </div>
 
-        <div className="flex space-x-2">
-          <Button 
-            onClick={() => setShowActionPlan(true)}
-            variant={actionPlan ? 'outline' : 'primary'}
-          >
-            <Wrench className="h-4 w-4 mr-2" />
-            {actionPlan ? 'Modifier Plan' : 'Plan d\'Action'}
-          </Button>
+        {/* Action Plan Modal */}
+        <ActionPlanModal
+          isOpen={showActionPlan}
+          onClose={() => setShowActionPlan(false)}
+          onSave={handleSaveActionPlan}
+          onUpdatePlanning={handleUpdatePlanning}
+          anomaly={anomaly}
+          existingActionPlan={actionPlan}
+        />
 
-          {actionPlan && (
-            <div className="flex items-center space-x-2">
-              <Badge variant={
-          actionPlan.status === 'completed' ? 'success' :
-          actionPlan.status === 'in_progress' ? 'warning' :
-          actionPlan.status === 'approved' ? 'info' : 'default'
-        }>
-          {actionPlan.completionPercentage}% terminé
-        </Badge>
-        {actionPlan.needsOutage && (
-          <Badge variant="warning">
-            Arrêt requis
-          </Badge>
-        )}
-      </div>
-    )}
-  </div>
-</div>
-
-        
-
-      {/* Action Plan Modal */}
-      <ActionPlanModal
-        isOpen={showActionPlan}
-        onClose={() => setShowActionPlan(false)}
-        onSave={handleSaveActionPlan}
-        onUpdatePlanning={handleUpdatePlanning}
-        anomaly={anomaly}
-        existingActionPlan={actionPlan}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Basic Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Informations Générales</span>
-                {actionPlan && (
-                  <div className="flex items-center space-x-2">
-                    <div className="text-sm text-gray-500">Plan d'action:</div>
-                    <div className="w-20 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ width: `${actionPlan.completionPercentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {actionPlan.completionPercentage}%
-                    </span>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content - 2/3 width */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* General Information Card */}
+            <Card className="shadow-sm">
+              <CardHeader className="border-b border-gray-100">
+                <CardTitle className="text-xl text-gray-900">Informations Générales</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-6">
+                  {/* Description */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description
+                    </label>
+                    {isEditing ? (
+                      <textarea
+                        value={editedAnomaly?.description || ''}
+                        onChange={(e) => setEditedAnomaly(prev => prev ? {...prev, description: e.target.value} : prev)}
+                        rows={4}
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    ) : (
+                      <p className="text-gray-900 bg-gray-50 p-4 rounded-lg border">
+                        {anomaly.description || 'Aucune description fournie'}
+                      </p>
+                    )}
                   </div>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Titre</label>
-                <p className="text-gray-900">{anomaly.title}</p>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <p className="text-gray-900">{anomaly.description}</p>
-              </div>
+                  {/* Information Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Service
+                      </label>
+                      {isEditing ? (
+                        <Input
+                          value={editedAnomaly?.service || ''}
+                          onChange={(e) => setEditedAnomaly(prev => prev ? {...prev, service: e.target.value} : prev)}
+                        />
+                      ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg border">
+                          {anomaly.service || 'Non spécifié'}
+                        </p>
+                      )}
+                    </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Équipement</label>
-                  <p className="text-gray-900">{anomaly.equipmentId}</p>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Équipement ID
+                      </label>
+                      {isEditing ? (
+                        <Input
+                          value={editedAnomaly?.equipmentId || ''}
+                          onChange={(e) => setEditedAnomaly(prev => prev ? {...prev, equipmentId: e.target.value} : prev)}
+                        />
+                      ) : (
+                        <p className="text-gray-900 bg-gray-50 p-3 rounded-lg border">
+                          {anomaly.equipmentId || 'Non spécifié'}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Show equipment ID and service info */}
+                    {(isEditing) && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Statut
+                        </label>
+                        <select
+                          value={editedAnomaly?.status || 'new'}
+                          onChange={(e) => setEditedAnomaly(prev => prev ? {...prev, status: e.target.value as any} : prev)}
+                          className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        >
+                          {statusOptions.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Service</label>
-                  <p className="text-gray-900">{anomaly.service}</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Responsable</label>
-                  <p className="text-gray-900">{anomaly.responsiblePerson}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Action Plan Summary */}
-          {actionPlan && (
-            <ActionPlanDetails 
-              actionPlan={actionPlan} 
-              anomaly={anomaly} 
-              onActionPlanUpdate={setActionPlan} 
-              onAnomalyStatusUpdate={handleAnomalyStatusUpdate} 
-            />
-          )}
-          
-          {/* REX File Upload - Only visible when anomaly is treated */}
-          <div className="mb-6">
-            <REXFileUpload 
-              key={`rex-${anomaly.id}-${rexFileRefresh}`}
-              anomalyId={anomaly.id}
-              isEnabled={anomaly.status === 'treated'} 
-              onFileUploaded={() => setRexFileRefresh(prev => prev + 1)}
-              onFileStatusChange={setHasRexFile}
-            />
-          </div>
-
-          {/* Close Anomaly Button - Only visible when anomaly is treated and has REX file */}
-          {anomaly.status === 'treated' && hasRexFile && (
+            {/* Action Plan Summary */}
+            {actionPlan && (
+              <ActionPlanDetails 
+                actionPlan={actionPlan} 
+                anomaly={anomaly} 
+                onActionPlanUpdate={setActionPlan} 
+                onAnomalyStatusUpdate={handleAnomalyStatusUpdate} 
+              />
+            )}
+            
+            {/* REX File Upload - Only visible when anomaly is treated */}
             <div className="mb-6">
-              <Card className="border-green-200 bg-green-50">
-                <CardContent className="p-4">
+              <REXFileUpload 
+                key={`rex-${anomaly.id}-${rexFileRefresh}`}
+                anomalyId={anomaly.id}
+                isEnabled={anomaly.status === 'treated'} 
+                onFileUploaded={() => setRexFileRefresh(prev => prev + 1)}
+                onFileStatusChange={setHasRexFile}
+              />
+            </div>
+
+            {/* Close Anomaly Button - Only visible when anomaly is treated and has REX file */}
+            {anomaly.status === 'treated' && hasRexFile && (
+              <Card className="border-green-200 bg-green-50 shadow-sm">
+                <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-lg font-semibold text-green-800 mb-2">
@@ -343,160 +440,93 @@ export const AnomalyDetail: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
-            </div>
-          )}
+            )}
 
-          {/* AI Predictions */}
-          <PredictionApproval 
-            anomaly={anomaly}
-            onUpdate={handleAnomalyUpdate}
-          />
+            {/* AI Predictions */}
+            <PredictionApproval 
+              anomaly={anomaly}
+              onUpdate={handleAnomalyUpdate}
+            />
+          </div>
 
-          {/* Comments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MessageSquare className="h-5 w-5" />
-                <span>Commentaires & REX</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Add Comment */}
-                <div className="flex space-x-3">
-                  <div className="flex-1">
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      placeholder="Ajouter un commentaire ou un retour d'expérience..."
-                      rows={3}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    />
-                  </div>
-                  <Button onClick={handleAddComment} disabled={!newComment.trim()}>
-                    Ajouter
-                  </Button>
-                </div>
-
-                {/* Existing Comments */}
-                <div className="space-y-3">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <User className="h-4 w-4 text-gray-500" />
-                      <span className="text-sm font-medium text-gray-900">Ahmed Bennani</span>
-                      <span className="text-xs text-gray-500">Il y a 2 heures</span>
+          {/* Sidebar - 1/3 width */}
+          <div className="space-y-6">
+            {/* Status & Metrics */}
+            <Card className="shadow-sm">
+              <CardHeader className="border-b border-gray-100">
+                <CardTitle className="text-lg text-gray-900">Métriques</CardTitle>
+              </CardHeader>
+              <CardContent className="p-6 space-y-4">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Priorité
+                    </label>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                      <span className="text-gray-900">Priorité {anomaly.priority || 1}</span>
+                      <Badge variant="default">P{anomaly.priority || 1}</Badge>
                     </div>
-                    <p className="text-sm text-gray-700">
-                      Inspection visuelle effectuée. Vibrations confirmées au niveau du palier côté accouplement.
-                      Recommandation: Remplacement du roulement lors du prochain arrêt mineur.
-                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Heures estimées
+                    </label>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                      <span className="text-gray-900">{anomaly.estimatedHours || 0} heures</span>
+                      <Clock className="h-4 w-4 text-gray-500" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Responsable
+                    </label>
+                    <div className="p-3 bg-gray-50 rounded-lg border">
+                      <span className="text-gray-900">{anomaly.responsiblePerson || 'Non assigné'}</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card className="shadow-sm">
+              <CardHeader className="border-b border-gray-100">
+                <CardTitle className="flex items-center space-x-2 text-lg text-gray-900">
+                  <Clock className="h-5 w-5" />
+                  <span>Chronologie</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="space-y-4">
+                  <div className="flex items-start space-x-3">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full mt-1.5"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">Anomalie créée</p>
+                      <p className="text-xs text-gray-500">{formatDateTime(anomaly.createdAt)}</p>
+                    </div>
                   </div>
                   
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <User className="h-4 w-4 text-blue-500" />
-                      <span className="text-sm font-medium text-blue-900">Système IA</span>
-                      <span className="text-xs text-blue-500">Il y a 1 jour</span>
+                  <div className="flex items-start space-x-3">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full mt-1.5"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">Analyse IA effectuée</p>
+                      <p className="text-xs text-gray-500">{formatDateTime(anomaly.createdAt)}</p>
                     </div>
-                    <p className="text-sm text-blue-700">
-                      Analyse prédictive: Probabilité de défaillance dans les 30 jours: 78%.
-                      Recommandation de planification urgente.
-                    </p>
+                  </div>
+                  
+                  <div className="flex items-start space-x-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">Dernière mise à jour</p>
+                      <p className="text-xs text-gray-500">{formatDateTime(anomaly.updatedAt)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Status & Priority */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Statut & Priorité</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-                <Badge variant={getStatusVariant(anomaly.status)}>
-                  {statusOptions.find(s => s.value === anomaly.status)?.label}
-                </Badge>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Priorité</label>
-                <p className="text-gray-900">Priorité {anomaly.priority || 1}</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Heures estimées</label>
-                <p className="text-gray-900">{anomaly.estimatedHours || 0}h</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Timeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Clock className="h-5 w-5" />
-                <span>Chronologie</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Anomalie créée</p>
-                    <p className="text-xs text-gray-500">{formatDateTime(anomaly.createdAt)}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Analyse IA effectuée</p>
-                    <p className="text-xs text-gray-500">{formatDateTime(anomaly.createdAt)}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Dernière mise à jour</p>
-                    <p className="text-xs text-gray-500">{formatDateTime(anomaly.updatedAt)}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Attachments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Paperclip className="h-5 w-5" />
-                <span>Pièces jointes</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded">
-                  <Paperclip className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">inspection_report.pdf</span>
-                </div>
-                <div className="flex items-center space-x-2 p-2 bg-gray-50 rounded">
-                  <Paperclip className="h-4 w-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">vibration_analysis.xlsx</span>
-                </div>
-                <Button variant="outline" size="sm" className="w-full mt-2">
-                  Ajouter un fichier
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </div>
