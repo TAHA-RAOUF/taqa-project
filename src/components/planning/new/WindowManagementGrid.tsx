@@ -9,11 +9,13 @@ import {
   Eye,
   AlertTriangle,
   Target,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
+import { Dropdown } from '../../ui/Dropdown';
 import { Anomaly, MaintenanceWindow, ActionPlan } from '../../../types';
 import { formatDate } from '../../../lib/utils';
 
@@ -26,6 +28,7 @@ interface WindowManagementGridProps {
   onUpdateWindow: (windowId: string, updates: Partial<MaintenanceWindow>) => void;
   onViewWindow: (window: MaintenanceWindow) => void;
   onEditWindow: (window: MaintenanceWindow) => void;
+  onDeleteWindow?: (windowId: string) => void;
   viewMode?: 'overview' | 'detailed';
 }
 
@@ -37,6 +40,7 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
   onUpdateWindow,
   onViewWindow,
   onEditWindow,
+  onDeleteWindow,
   viewMode = 'overview'
 }) => {
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null);
@@ -159,17 +163,42 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
                     <Badge variant={getStatusBadgeVariant(window.status)} className="text-xs font-medium">
                       {window.status.replace('_', ' ')}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="p-1.5 h-8 w-8 hover:bg-gray-100 rounded-full transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Add dropdown menu functionality here if needed
-                      }}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
+                    <Dropdown 
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1.5 h-8 w-8 hover:bg-gray-100 rounded-full transition-colors"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      }
+                      align="right"
+                      items={[
+                        {
+                          label: 'Voir',
+                          onClick: () => onViewWindow(window),
+                          icon: <Eye className="h-4 w-4 text-blue-500" />
+                        },
+                        {
+                          label: 'Modifier',
+                          onClick: () => onEditWindow(window),
+                          icon: <Edit className="h-4 w-4 text-gray-500" />
+                        },
+                        ...(onDeleteWindow ? [
+                          {
+                            label: 'Supprimer',
+                            onClick: () => {
+                              if (window.status !== 'completed' && onDeleteWindow) {
+                                onDeleteWindow(window.id);
+                              }
+                            },
+                            icon: <Trash2 className="h-4 w-4 text-red-500" />,
+                            className: 'text-red-600 hover:bg-red-50'
+                          }
+                        ] : [])
+                      ]}
+                    />
                   </div>
                 </div>
 
@@ -270,20 +299,11 @@ export const WindowManagementGrid: React.FC<WindowManagementGridProps> = ({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="text-sm flex-1 hover:bg-gray-50 transition-colors"
-                        onClick={() => onEditWindow(window)}
-                      >
-                        <Edit className="h-4 w-4 mr-2" />
-                        Modifier
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         className="text-sm flex-1 hover:bg-blue-50 hover:border-blue-300 transition-colors"
                         onClick={() => onViewWindow(window)}
                       >
                         <Eye className="h-4 w-4 mr-2" />
-                        Voir
+                        Voir les détails
                       </Button>
                     </div>
                   </div>

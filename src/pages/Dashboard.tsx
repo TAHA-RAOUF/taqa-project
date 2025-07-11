@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { anomalyService } from '../services/anomalyService';
 import { SupabaseActionPlanService } from '../services/supabaseActionPlanService';
+import { maintenanceWindowService } from '../services/maintenanceWindowService';
 import toast from 'react-hot-toast';
 
 interface DashboardKPIs {
@@ -35,7 +36,7 @@ interface DashboardKPIs {
   
   // Performance Metrics
   averageResolutionTime: number;
-  safetyScore: number;
+  operationalEfficiency: number;
   
   // Trend Data
   newAnomaliesThisWeek: number;
@@ -60,7 +61,7 @@ export const Dashboard: React.FC = () => {
     overDueActionItems: 0,
     actionItemsCompletionRate: 0,
     averageResolutionTime: 0,
-    safetyScore: 0,
+    operationalEfficiency: 0,
     newAnomaliesThisWeek: 0,
     resolvedAnomaliesThisWeek: 0,
     monthlyTrend: { current: 0, previous: 0, change: 0 }
@@ -197,17 +198,38 @@ export const Dashboard: React.FC = () => {
           }, 0) / resolvedWithTimes.length / (1000 * 60 * 60 * 24) // Convert to days
         : 0;
 
-      // Safety score calculation
-      const criticalityScores = anomalies.map(a => {
-        const fiabiliteIntegriteScore = a.userFiabiliteIntegriteScore ?? a.fiabiliteIntegriteScore ?? 0;
-        const disponibiliteScore = a.userDisponibiliteScore ?? a.disponibiliteScore ?? 0;
-        const processSafetyScore = a.userProcessSafetyScore ?? a.processSafetyScore ?? 0;
-        return fiabiliteIntegriteScore + disponibiliteScore + processSafetyScore;
-      });
-      const avgCriticality = criticalityScores.length > 0 
-        ? criticalityScores.reduce((sum: number, score: number) => sum + score, 0) / criticalityScores.length 
+      // Operational Efficiency calculation - based on action plan completion timing and quality
+      const maintenanceWindows = await maintenanceWindowService.getMaintenanceWindows();
+      
+      // Get maintenance windows that are completed or in progress
+      const activeWindows = maintenanceWindows.filter(w => 
+        ['planned', 'in_progress', 'completed'].includes(w.status)
+      );
+      
+      // Percentage of anomalies that are assigned to maintenance windows
+      const scheduledAnomalyCount = anomalies.filter(a => a.maintenanceWindowId).length;
+      const schedulingEfficiency = totalAnomalies > 0 ? (scheduledAnomalyCount / totalAnomalies) * 100 : 0;
+      
+      // Action plan quality score based on completion rates
+      const actionPlanQuality = actionItemsCompletionRate;
+      
+      // Response time efficiency - percentage of anomalies treated within target time (7 days)
+      const targetResponseDays = 7;
+      const responseTimeEfficiency = resolvedWithTimes.length > 0
+        ? (resolvedWithTimes.filter(a => {
+            const created = new Date(a.createdAt);
+            const resolved = new Date(a.updatedAt);
+            const daysToResolve = (resolved.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+            return daysToResolve <= targetResponseDays;
+          }).length / resolvedWithTimes.length) * 100
         : 0;
-      const safetyScore = Math.max(0, 100 - (avgCriticality * 6.67)); // Scale 0-15 to 100-0
+      
+      // Combined operational efficiency score
+      const operationalEfficiency = (
+        schedulingEfficiency * 0.4 + 
+        actionPlanQuality * 0.4 + 
+        responseTimeEfficiency * 0.2
+      );
 
       return {
         totalAnomalies,
@@ -221,7 +243,7 @@ export const Dashboard: React.FC = () => {
         overDueActionItems,
         actionItemsCompletionRate,
         averageResolutionTime,
-        safetyScore,
+        operationalEfficiency,
         newAnomaliesThisWeek,
         resolvedAnomaliesThisWeek,
         monthlyTrend: {
@@ -244,7 +266,7 @@ export const Dashboard: React.FC = () => {
         overDueActionItems: 0,
         actionItemsCompletionRate: 0,
         averageResolutionTime: 0,
-        safetyScore: 0,
+        operationalEfficiency: 0,
         newAnomaliesThisWeek: 0,
         resolvedAnomaliesThisWeek: 0,
         monthlyTrend: { current: 0, previous: 0, change: 0 }
@@ -278,6 +300,14 @@ export const Dashboard: React.FC = () => {
     if (score >= 60) return { label: 'Bon', color: 'text-yellow-600' };
     if (score >= 40) return { label: 'Moyen', color: 'text-orange-600' };
     return { label: 'Critique', color: 'text-red-600' };
+  };
+
+  const getEfficiencyLevel = (score: number) => {
+    if (score >= 85) return { label: 'Optimale', color: 'text-green-600' };
+    if (score >= 70) return { label: 'Efficace', color: 'text-blue-600' };
+    if (score >= 50) return { label: 'Adéquate', color: 'text-yellow-600' };
+    if (score >= 30) return { label: 'Améliorable', color: 'text-orange-600' };
+    return { label: 'Insuffisante', color: 'text-red-600' };
   };
 
   return (
@@ -420,14 +450,14 @@ export const Dashboard: React.FC = () => {
           <CardContent className="p-0">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Score de Sécurité</p>
-                <p className={`text-2xl font-bold ${getSafetyLevel(dashboardKPIs.safetyScore).color}`}>
-                  {getSafetyLevel(dashboardKPIs.safetyScore).label}
+                <p className="text-sm text-gray-600 mb-1">Efficacité Opérationnelle</p>
+                <p className={`text-2xl font-bold ${getEfficiencyLevel(dashboardKPIs.operationalEfficiency).color}`}>
+                  {getEfficiencyLevel(dashboardKPIs.operationalEfficiency).label}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">{dashboardKPIs.safetyScore.toFixed(0)}/100</p>
+                <p className="text-xs text-gray-500 mt-1">{dashboardKPIs.operationalEfficiency.toFixed(0)}/100</p>
               </div>
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Shield className="h-6 w-6 text-orange-600" />
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Activity className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </CardContent>

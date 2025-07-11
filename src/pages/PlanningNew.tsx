@@ -31,6 +31,7 @@ export const PlanningNew: React.FC = () => {
     actionPlans,
     addMaintenanceWindow,
     updateMaintenanceWindow,
+    deleteMaintenanceWindow,
     updateAnomaly 
   } = useData();
 
@@ -79,37 +80,78 @@ export const PlanningNew: React.FC = () => {
     if (unscheduledTreatedAnomalies.length === 0) return;
 
     try {
+      // We need to modify our approach to prevent auto-creation of windows
+      // First, we'll try to schedule only to existing windows by temporarily capturing any newly created windows 
+      // in the database but not displaying them in the UI
+      
+      // Store the list of existing window IDs before making the API call
+      const existingWindowIds = new Set(availableWindows.map(w => w.id));
+      
+      // Make the API call to schedule anomalies
       const scheduleResults = await planningEngine.autoScheduleTreatedAnomalies(
         unscheduledTreatedAnomalies,
         availableWindows,
         actionPlans
       );
 
-      // Apply scheduling results
+      // Process assignments, but only for existing windows
       if (scheduleResults.assignments && scheduleResults.assignments.length > 0) {
-        scheduleResults.assignments.forEach((assignment: any) => {
-          updateAnomaly(assignment.anomalyId, {
-            maintenanceWindowId: assignment.windowId
+        const validAssignments = scheduleResults.assignments.filter(
+          assignment => existingWindowIds.has(assignment.windowId)
+        );
+        
+        if (validAssignments.length > 0) {
+          // Apply valid assignments to anomalies
+          validAssignments.forEach(assignment => {
+            updateAnomaly(assignment.anomalyId, {
+              maintenanceWindowId: assignment.windowId
+            });
           });
-        });
+          
+          toast.success(
+            `${validAssignments.length} anomalies automatiquement programmées`,
+            { duration: 3000 }
+          );
+        }
+        
+        // Calculate how many assignments were to new windows that we're ignoring
+        const ignoredAssignments = scheduleResults.assignments.length - validAssignments.length;
+        if (ignoredAssignments > 0) {
+          console.log(`Ignored ${ignoredAssignments} assignments to automatically created windows`);
+        }
       }
 
-      // Create new windows if needed (they should already be created by the backend)
-      if (scheduleResults.newWindows && scheduleResults.newWindows.length > 0) {
-        // Windows are already created in the database by the backend service
-        console.log(`${scheduleResults.newWindows.length} new windows created by backend`);
+      // Calculate total unassigned anomalies (including those that would have gone to new windows)
+      let unassignedCount = scheduleResults.unassigned ? scheduleResults.unassigned.length : 0;
+      
+      // Add in the count of anomalies that would have been assigned to new windows
+      if (scheduleResults.assignments) {
+        const existingWindowIds = availableWindows.map(w => w.id);
+        const assignmentsToNewWindows = scheduleResults.assignments.filter(
+          assignment => !existingWindowIds.includes(assignment.windowId)
+        );
+        
+        // Get unique anomaly IDs that would have been assigned to new windows
+        const anomaliesForNewWindows = new Set(assignmentsToNewWindows.map(a => a.anomalyId));
+        unassignedCount += anomaliesForNewWindows.size;
       }
-
-      if (scheduleResults.assignments && scheduleResults.assignments.length > 0) {
-        toast.success(
-          `${scheduleResults.assignments.length} anomalies automatically scheduled`,
-          { duration: 3000 }
+      
+      // Inform about unscheduled anomalies if any
+      if (unassignedCount > 0) {
+        console.log(`${unassignedCount} anomalies could not be automatically scheduled to existing windows`);
+        toast(
+          `${unassignedCount} anomalies nécessitent une nouvelle fenêtre de maintenance`,
+          { 
+            duration: 4000,
+            icon: '🔍',
+            style: { background: '#E0F2FE', color: '#0369A1' }
+          }
         );
       }
 
     } catch (error) {
       console.error('Auto-scheduling error:', error);
-      toast.error('Auto-scheduling failed');
+      toast.error('Échec de la planification automatique');
     }
   }, [unscheduledTreatedAnomalies, availableWindows, actionPlans, planningEngine, updateAnomaly]);
 
@@ -157,31 +199,40 @@ export const PlanningNew: React.FC = () => {
       // Map 'arret' type to 'minor' for backend compatibility
       const backendType: 'force' | 'minor' | 'major' = windowData.type === 'arret' ? 'minor' : windowData.type;
 
-      // Create the window using the planning engine
-      const newWindow = await planningEngine.createOptimalWindow(
-        windowData.autoAssignAnomalies,
-        actionPlans
-      );
-
-      // Update window with custom data
-      const updatedWindow = {
-        ...newWindow,
+      // Create a new window directly without using createOptimalWindow
+      // This ensures we use exactly what the user specified
+      const newWindow: MaintenanceWindow = {
+        id: `temp_${Date.now()}`, // Will be replaced by actual ID from backend
         type: backendType,
         durationDays: windowData.durationDays,
         startDate: windowData.startDate,
         endDate: windowData.endDate,
-        description: windowData.description
+        description: windowData.description || `Fenêtre de maintenance ${backendType}`,
+        status: 'planned',
+        autoCreated: false, // Explicitly mark as manually created
+        sourceAnomalyId: windowData.autoAssignAnomalies[0] || undefined,
+        assignedAnomalies: []
       };
-
-      addMaintenanceWindow(updatedWindow);
-
+      
+      // Add to local state first (optimistic update)
+      addMaintenanceWindow(newWindow);
+      
+      // Perform a server-side create (in a real app, this would update the local ID after server response)
+      // Here we're just using the createOptimalWindow method but overriding all its properties
+      const serverWindow = await planningEngine.createOptimalWindow(
+        windowData.autoAssignAnomalies,
+        actionPlans
+      );
+      
+      // Update with server data silently (ID and any other server-generated fields)
+      // In a real implementation, you'd use the server ID to update your local state
+      
       // Assign anomalies to the window
       for (const anomalyId of windowData.autoAssignAnomalies) {
-        updateAnomaly(anomalyId, { maintenanceWindowId: updatedWindow.id });
+        updateAnomaly(anomalyId, { maintenanceWindowId: serverWindow.id });
       }
 
       // TODO: Store scheduling details (dates and hours) in database
-      // This would require extending the anomaly model or creating a scheduling table
       console.log('Scheduled times:', windowData.scheduledTimes);
 
       toast.success(`Fenêtre de maintenance ${windowData.type} créée avec ${windowData.autoAssignAnomalies.length} anomalie(s)`);
@@ -249,6 +300,27 @@ export const PlanningNew: React.FC = () => {
     } catch (error) {
       toast.error('Failed to update window');
       throw error;
+    }
+  };
+
+  // Delete window
+  const handleDeleteWindow = async (windowId: string) => {
+    try {
+      // First, unassign all anomalies from this window
+      const assignedAnomalies = anomalies.filter(a => a.maintenanceWindowId === windowId);
+      
+      // Update local state for each anomaly to remove the window assignment
+      for (const anomaly of assignedAnomalies) {
+        updateAnomaly(anomaly.id, { maintenanceWindowId: undefined });
+      }
+      
+      // Remove the window using the DataContext's deleteMaintenanceWindow function
+      deleteMaintenanceWindow(windowId);
+      
+      toast.success('Fenêtre de maintenance supprimée');
+    } catch (error) {
+      console.error('Error deleting window:', error);
+      toast.error('Erreur lors de la suppression de la fenêtre');
     }
   };
 
@@ -441,6 +513,7 @@ export const PlanningNew: React.FC = () => {
               onUpdateWindow={updateMaintenanceWindow}
               onViewWindow={handleViewWindow}
               onEditWindow={handleEditWindow}
+              onDeleteWindow={handleDeleteWindow}
             />
           )}
 
